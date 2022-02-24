@@ -1,3 +1,5 @@
+[features]
+seeds = false
 [programs.localnet]
 notariz_programs = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
 
@@ -6,7 +8,7 @@ url = "https://anchor.projectserum.com"
 
 [provider]
 cluster = "localnet"
-wallet = "/home/dichiara/.config/solana/id.json"
+wallet = "/home/jfdum/.config/solana/id.json"
 
 [scripts]
 test = "yarn run mocha -t 1000000 tests/"

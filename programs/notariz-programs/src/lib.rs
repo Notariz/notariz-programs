@@ -5,7 +5,8 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod notariz_programs {
     use super::*;
-    pub fn initialize(ctx: Context<Initialize>) -> ProgramResult {
+
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         Ok(())
     }
 }
