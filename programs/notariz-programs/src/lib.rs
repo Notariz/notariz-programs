@@ -61,6 +61,46 @@ pub mod notariz_programs {
         err!(NotarizError::DeedNoCorrespondingInheritor)
     }
 
+    pub fn set_expiration(ctx: Context<EditDeed>, duration: u32) -> Result<()> {
+        require!(ctx.accounts.deed.owner_address == ctx.accounts.owner.key(), NotarizError::DeedOwnershipFailure);
+        let deed = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.time_until_expiration = Some(duration);
+        Ok(())
+    }
+
+    pub fn unset_expiration(ctx: Context<EditDeed>) -> Result<()> {
+        require!(ctx.accounts.deed.owner_address == ctx.accounts.owner.key(), NotarizError::DeedOwnershipFailure);
+        let deed = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.time_until_expiration = None;
+        Ok(())
+    }
+
+    pub fn set_recovery_account(ctx: Context<EditDeed>, key: Pubkey) -> Result<()> {
+        require!(ctx.accounts.deed.owner_address == ctx.accounts.owner.key(), NotarizError::DeedOwnershipFailure);
+        let deed = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.recovery_address = Some(key);
+        Ok(())
+    }
+
+    pub fn unset_recovery_account(ctx: Context<EditDeed>) -> Result<()> {
+        require!(ctx.accounts.deed.owner_address == ctx.accounts.owner.key(), NotarizError::DeedOwnershipFailure);
+        let deed = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.recovery_address = None;
+        Ok(())
+    }
+
+    pub fn defer_ownership(ctx: Context<EditDeed>, key: Pubkey) -> Result<()> {
+        require!(ctx.accounts.deed.owner_address == ctx.accounts.owner.key(), NotarizError::DeedOwnershipFailure);
+        let deed = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.owner_address = key;
+        Ok(())
+    }
+
 }
 
 #[derive(Accounts)]
@@ -87,7 +127,7 @@ pub struct Deed {
     pub recovery_address: Option<Pubkey>,
     pub last_seen: i64, // couldn't find UnixTimestamp location
     pub total_shares: u32,
-    pub deed_expiration_time: Option<u64>, // seconds
+    pub time_until_expiration: Option<u32>, // seconds
     // hoping there will be no conflict with timestamp (i64) additions
     pub inheritance: Vec<Inheritor>
 }

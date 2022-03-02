@@ -27,7 +27,7 @@ describe("notariz-programs", () => {
     // expect(deedState.ownerAddress).to.equal(divineOwner.publicKey);
 
     expect(deedState.recoveryAddress).to.equal(null);
-    expect(deedState.deedExpirationTime).to.equal(null);
+    expect(deedState.timeUntilExpiration).to.equal(null);
     expect(deedState.inheritance).to.eql([]);
     expect(deedState.totalShares).to.equal(0);
 
