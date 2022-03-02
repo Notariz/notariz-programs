@@ -10,7 +10,6 @@ pub mod notariz_programs {
         let deed = &mut ctx.accounts.deed;
         deed.owner_address = ctx.accounts.owner.key();
         deed.last_seen = Clock::get()?.unix_timestamp; // might be a valid timestamp i guess
-        // warning - possible injection of bad inheritance vec - to discuss
         Ok(())
     }
 
@@ -88,7 +87,7 @@ pub struct Deed {
     pub recovery_address: Option<Pubkey>,
     pub last_seen: i64, // couldn't find UnixTimestamp location
     pub total_shares: u32,
-    pub deed_expiration_time: u64, // seconds
+    pub deed_expiration_time: Option<u64>, // seconds
     // hoping there will be no conflict with timestamp (i64) additions
     pub inheritance: Vec<Inheritor>
 }
