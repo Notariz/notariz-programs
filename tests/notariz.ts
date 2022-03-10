@@ -7,12 +7,12 @@ describe('notariz', () => {
   console.log("🚀 Starting test...")
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
+  const program = anchor.workspace.Notariz as Program<Notariz>;
+  const deedKeypair = anchor.web3.Keypair.generate();
+  const deedCreator = program.provider.wallet;
 
   it('🚀 Deed creation', async () => {
     // Add your test here.
-    const program = anchor.workspace.Notariz as Program<Notariz>;
-    const deedKeypair = anchor.web3.Keypair.generate();
-    const deedCreator = program.provider.wallet;
 
     await program.rpc.createDeed({
       accounts: {
@@ -23,14 +23,30 @@ describe('notariz', () => {
       signers: [deedKeypair]
     })
 
-    let deedState = await program.account.myDeed.fetch(deedKeypair.publicKey);
+    let deedAccount = await program.account.deed.fetch(deedKeypair.publicKey);
 
-    expect(deedState.withdrawalPeriod).to.equal(2);
-    expect(deedState.leftToBeShared).to.equal(100);
-    expect(deedState.owner).to.eql(deedCreator.publicKey);
-    expect(deedState.emergencies).to.eql([]);
-    expect(deedState.recoveries).to.eql([]);
-    console.log(deedState.lastSeen);
+    expect(deedAccount.withdrawalPeriod).to.equal(2);
+    expect(deedAccount.leftToBeShared).to.equal(100);
+    expect(deedAccount.owner).to.eql(deedCreator.publicKey);
+    expect(deedAccount.emergencies).to.eql([]);
+    expect(deedAccount.recoveries).to.eql([]);
+    console.log(deedAccount.lastSeen);
 
   });
+
+  it('🚀 Deed deletion', async () => {
+
+    await program.rpc.deleteDeed({
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey
+      }
+    })
+
+    const deedAccount = await program.account.deed.fetchNullable(deedKeypair.publicKey);
+
+    expect(deedAccount === null);
+
+  });
+
 });
