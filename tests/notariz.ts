@@ -8,6 +8,7 @@ describe('notariz', () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
   const program = anchor.workspace.Notariz as Program<Notariz>;
+
   const deedKeypair = anchor.web3.Keypair.generate();
   const deedCreator = program.provider.wallet;
 
@@ -28,8 +29,6 @@ describe('notariz', () => {
     expect(deedAccount.withdrawalPeriod).to.equal(2);
     expect(deedAccount.leftToBeShared).to.equal(100);
     expect(deedAccount.owner).to.eql(deedCreator.publicKey);
-    expect(deedAccount.emergencies).to.eql([]);
-    expect(deedAccount.recoveries).to.eql([]);
     console.log(deedAccount.lastSeen);
 
   });
@@ -47,6 +46,37 @@ describe('notariz', () => {
 
     expect(deedAccount === null);
 
+  });
+
+  it('🚀 Adding an emergency', async () => {
+    const deedKeypair = anchor.web3.Keypair.generate();
+    const emergencyKeypair = anchor.web3.Keypair.generate();
+
+    const percentage = 10;
+    const emergencyReceiver = anchor.web3.Keypair.generate();
+
+    await program.rpc.createDeed({
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      },
+      signers: [deedKeypair]
+    });
+
+    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, {
+      accounts: {
+        emergency: emergencyKeypair.publicKey,
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      },
+      signers: [emergencyKeypair]
+    });
+
+    let emergencyAccount = await program.account.emergency.fetch(emergencyKeypair.publicKey);
+
+    expect(emergencyAccount.receiver).to.eql(emergencyReceiver.publicKey);
   });
 
 });
