@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::system_program;
+use anchor_lang::solana_program::system_instruction;
 
 declare_id!("DFtRYEj6CB8xF6MkukkqnCxgiku7K2cJbSxsaHQWogdE");
 
@@ -52,6 +53,7 @@ pub mod notariz {
         deed.last_seen = clock.unix_timestamp;
         deed.left_to_be_shared -= percentage;
 
+        emergency.from_deed = deed.key();
         emergency.owner = *owner.key;
         emergency.receiver = receiver;
         emergency.percentage += percentage;
@@ -63,8 +65,11 @@ pub mod notariz {
     pub fn delete_emergency(ctx: Context<DeleteEmergency>) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+        let lamports_to_send = emergency.to_account_info().lamports();
 
         deed.left_to_be_shared += emergency.percentage;
+
+        system_instruction::transfer(&emergency.key(), &deed.key(), lamports_to_send);
 
         Ok(())
     }
@@ -84,7 +89,11 @@ pub mod notariz {
 
     pub fn redeem_emergency(ctx: Context<RedeemEmergency>) -> ProgramResult {
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+        let deed: &mut AccountInfo = &mut ctx.accounts.deed;
+
         let clock: Clock = Clock::get().unwrap();
+        let receiver: &Signer = &ctx.accounts.receiver;
+        let lamports_to_send = deed.lamports() * u64::from(emergency.percentage) / 100;
 
         if emergency.claimed_timestamp == 0 {
             return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into())
@@ -93,6 +102,8 @@ pub mod notariz {
         if clock.unix_timestamp - emergency.claimed_timestamp < emergency.withdrawal_period {
             return Err(NotarizErrorCode::RedeemTimestampError.into())
         }
+
+        system_instruction::transfer(&emergency.from_deed.key(), &receiver.key(), lamports_to_send);
 
         Ok(())
     }
@@ -161,6 +172,8 @@ pub struct ClaimEmergency<'info> {
 pub struct RedeemEmergency<'info> {
     #[account(mut, has_one = receiver, close = receiver)]
     pub emergency: Account<'info, Emergency>,
+    #[account(address = emergency.from_deed)]
+    pub deed: AccountInfo<'info>,
     #[account(mut)]
     pub receiver: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
@@ -182,18 +195,18 @@ const WITHDRAWAL_PERIOD_LENGTH: usize = 8;
 const LEFT_TO_BE_SHARED_LENGTH: usize = 1;
 const DISCRIMINATOR_LENGTH: usize = 8;
 
+const DEED_LENGTH: usize = PUBLIC_KEY_LENGTH + TIMESTAMP_LENGTH + WITHDRAWAL_PERIOD_LENGTH + LEFT_TO_BE_SHARED_LENGTH + DISCRIMINATOR_LENGTH;
+
 impl Deed {
     const LEN: usize =
-    DISCRIMINATOR_LENGTH
-    + PUBLIC_KEY_LENGTH 
-    + LEFT_TO_BE_SHARED_LENGTH
-    + TIMESTAMP_LENGTH 
-    + WITHDRAWAL_PERIOD_LENGTH;
+    DISCRIMINATOR_LENGTH +
+    DEED_LENGTH;
 }
 
 #[account]
 #[derive(Default)]
 pub struct Emergency {
+    pub from_deed: Pubkey,
     pub owner: Pubkey,
     pub receiver: Pubkey,
     pub percentage: u8,
@@ -201,7 +214,9 @@ pub struct Emergency {
     pub claimed_timestamp: i64
 }
 
-const EMERGENCY_LENGTH: usize = 81; // 32 + 32 + 1 + 8 + 8;
+const PERCENTAGE_LENGTH: usize = 1;
+
+const EMERGENCY_LENGTH: usize = 3 * PUBLIC_KEY_LENGTH + PERCENTAGE_LENGTH + WITHDRAWAL_PERIOD_LENGTH + TIMESTAMP_LENGTH;
 
 impl Emergency {
     const LEN: usize = 
@@ -212,11 +227,12 @@ impl Emergency {
 #[account]
 #[derive(Default)]
 pub struct Recovery {
+    pub from_deed: Pubkey,
     pub owner: Pubkey,
     pub receiver: Pubkey
 }
 
-const RECOVERY_LENGTH: usize = 16; // 8 + 8
+const RECOVERY_LENGTH: usize = 3 * PUBLIC_KEY_LENGTH; 
 
 impl Recovery {
     const LEN: usize =
@@ -227,6 +243,8 @@ impl Recovery {
 
 #[error]
 pub enum NotarizErrorCode {
+    #[msg("The account does not have the lamports it is willing to transfer")]
+    LamportTransferError,
     #[msg("This emergency has already been claimed.")]
     ClaimTimestampGreaterThanZeroError,
     #[msg("This emergency has yet to be claimed.")]
