@@ -12,18 +12,18 @@ pub mod notariz {
         let clock: Clock = Clock::get().unwrap();
         
         deed.owner = *owner.key;
-        deed.withdrawal_period = 2;
+        deed.withdrawal_period = 2 * 3600 * 24; // Day-to-second conversion
         deed.left_to_be_shared = 100;
         deed.last_seen = clock.unix_timestamp;
 
         Ok(())
     }
 
-    pub fn edit_withdrawal_period(ctx: Context<EditDeed>, withdrawal_period: u32) -> ProgramResult {
+    pub fn edit_withdrawal_period(ctx: Context<EditDeed>, withdrawal_period: i64) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let clock: Clock = Clock::get().unwrap();
 
-        deed.withdrawal_period = withdrawal_period;
+        deed.withdrawal_period = withdrawal_period; // Day-to-second conversion
         deed.last_seen = clock.unix_timestamp;
 
         Ok(())
@@ -55,6 +55,7 @@ pub mod notariz {
         emergency.owner = *owner.key;
         emergency.receiver = receiver;
         emergency.percentage += percentage;
+        emergency.withdrawal_period = deed.withdrawal_period;
                 
         Ok(())
     }
@@ -64,6 +65,34 @@ pub mod notariz {
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
 
         deed.left_to_be_shared += emergency.percentage;
+
+        Ok(())
+    }
+
+    pub fn claim_emergency(ctx: Context<ClaimEmergency>) -> ProgramResult {
+        let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+        let clock: Clock = Clock::get().unwrap();
+
+        if emergency.claimed_timestamp > 0 {
+            return Err(NotarizErrorCode::ClaimTimestampGreaterThanZeroError.into())
+        }
+
+        emergency.claimed_timestamp = clock.unix_timestamp;
+
+        Ok(())
+    }
+
+    pub fn redeem_emergency(ctx: Context<RedeemEmergency>) -> ProgramResult {
+        let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+        let clock: Clock = Clock::get().unwrap();
+
+        if emergency.claimed_timestamp == 0 {
+            return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into())
+        }
+
+        if clock.unix_timestamp - emergency.claimed_timestamp < emergency.withdrawal_period {
+            return Err(NotarizErrorCode::RedeemTimestampError.into())
+        }
 
         Ok(())
     }
@@ -118,18 +147,38 @@ pub struct DeleteEmergency<'info> {
     pub system_program: Program<'info, System>
 }
 
+#[derive(Accounts)] 
+pub struct ClaimEmergency<'info> {
+    #[account(mut, has_one = receiver)]
+    pub emergency: Account<'info, Emergency>,
+    #[account(mut)]
+    pub receiver: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>
+}
+
+#[derive(Accounts)] 
+pub struct RedeemEmergency<'info> {
+    #[account(mut, has_one = receiver, close = receiver)]
+    pub emergency: Account<'info, Emergency>,
+    #[account(mut)]
+    pub receiver: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>
+}
+
 #[account]
 #[derive(Default)]
 pub struct Deed {
     pub owner: Pubkey,
     pub last_seen: i64,
     pub left_to_be_shared: u8, // Percentage comprised in [1;100]
-    pub withdrawal_period: u32, // In seconds (up to 136 years)
+    pub withdrawal_period: i64, // In seconds (up to 136 years)
 }
 
 const PUBLIC_KEY_LENGTH: usize = 32;
 const TIMESTAMP_LENGTH: usize = 8;
-const WITHDRAWAL_PERIOD_LENGTH: usize = 4;
+const WITHDRAWAL_PERIOD_LENGTH: usize = 8;
 const LEFT_TO_BE_SHARED_LENGTH: usize = 1;
 const DISCRIMINATOR_LENGTH: usize = 8;
 
@@ -148,8 +197,8 @@ pub struct Emergency {
     pub owner: Pubkey,
     pub receiver: Pubkey,
     pub percentage: u8,
-    pub claimed_timestamp: i64,
-    pub redeemed_timestamp: i64
+    pub withdrawal_period: i64,
+    pub claimed_timestamp: i64
 }
 
 const EMERGENCY_LENGTH: usize = 81; // 32 + 32 + 1 + 8 + 8;
@@ -164,11 +213,10 @@ impl Emergency {
 #[derive(Default)]
 pub struct Recovery {
     pub owner: Pubkey,
-    pub receiver: Pubkey,
-    pub redeemed: bool
+    pub receiver: Pubkey
 }
 
-const RECOVERY_LENGTH: usize = 17; // 8 + 8 + 1
+const RECOVERY_LENGTH: usize = 16; // 8 + 8
 
 impl Recovery {
     const LEN: usize =
@@ -179,6 +227,10 @@ impl Recovery {
 
 #[error]
 pub enum NotarizErrorCode {
-    #[msg("This emergency already exists.")]
-    EmergencyUnicityError
+    #[msg("This emergency has already been claimed.")]
+    ClaimTimestampGreaterThanZeroError,
+    #[msg("This emergency has yet to be claimed.")]
+    ClaimTimestampEqualsToZeroError,
+    #[msg("This emergency cannot be redeemed yet.")]
+    RedeemTimestampError
 }
