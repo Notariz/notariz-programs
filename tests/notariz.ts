@@ -76,7 +76,49 @@ describe('notariz', () => {
 
     let emergencyAccount = await program.account.emergency.fetch(emergencyKeypair.publicKey);
 
+    expect(emergencyAccount.owner).to.eql(deedCreator.publicKey);
     expect(emergencyAccount.receiver).to.eql(emergencyReceiver.publicKey);
+    expect(emergencyAccount.percentage).to.equal(percentage);
+  });
+
+  it('🚀 Deleting an emergency', async () => {
+    const deedKeypair = anchor.web3.Keypair.generate();
+    const emergencyKeypair = anchor.web3.Keypair.generate();
+
+    const percentage = 10;
+    const emergencyReceiver = anchor.web3.Keypair.generate();
+
+    await program.rpc.createDeed({
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      },
+      signers: [deedKeypair]
+    });
+
+    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, {
+      accounts: {
+        emergency: emergencyKeypair.publicKey,
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      },
+      signers: [emergencyKeypair]
+    });
+
+    await program.rpc.deleteEmergency({
+      accounts: {
+        emergency: emergencyKeypair.publicKey,
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      }
+    });
+
+    const emergencyAccount = await program.account.emergency.fetchNullable(emergencyKeypair.publicKey);
+
+    expect(emergencyAccount === null);
   });
 
 });

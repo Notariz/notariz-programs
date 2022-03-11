@@ -37,6 +37,15 @@ pub mod notariz {
                 
         Ok(())
     }
+
+    pub fn delete_emergency(ctx: Context<DeleteEmergency>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+
+        deed.left_to_be_shared += emergency.percentage;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -67,6 +76,18 @@ pub struct EditDeed<'info> {
 #[derive(Accounts)] 
 pub struct AddEmergency<'info> {
     #[account(init, payer = owner, space = Emergency::LEN)]
+    pub emergency: Account<'info, Emergency>,
+    #[account(mut, has_one = owner)]
+    pub deed: Account<'info, Deed>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>
+}
+
+#[derive(Accounts)] 
+pub struct DeleteEmergency<'info> {
+    #[account(mut, has_one = owner, close = owner)]
     pub emergency: Account<'info, Emergency>,
     #[account(mut, has_one = owner)]
     pub deed: Account<'info, Deed>,
@@ -137,6 +158,6 @@ impl Recovery {
 
 #[error]
 pub enum NotarizErrorCode {
-    #[msg("The user is not the deed's owner.")]
-    OwnershipError
+    #[msg("This emergency already exists.")]
+    EmergencyUnicityError
 }
