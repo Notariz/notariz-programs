@@ -15,6 +15,27 @@ pub mod notariz {
         deed.withdrawal_period = 2;
         deed.left_to_be_shared = 100;
         deed.last_seen = clock.unix_timestamp;
+
+        Ok(())
+    }
+
+    pub fn edit_withdrawal_period(ctx: Context<EditDeed>, withdrawal_period: u32) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        let clock: Clock = Clock::get().unwrap();
+
+        deed.withdrawal_period = withdrawal_period;
+        deed.last_seen = clock.unix_timestamp;
+
+        Ok(())
+    }
+
+    pub fn edit_owner(ctx: Context<EditDeed>, new_owner: Pubkey) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        let clock: Clock = Clock::get().unwrap();
+
+        deed.owner = new_owner;
+        deed.last_seen = clock.unix_timestamp;
+
         Ok(())
     }
 
@@ -59,17 +80,17 @@ pub struct CreateDeed<'info> {
 }
 
 #[derive(Accounts)]
-pub struct DeleteDeed<'info> {
-    #[account(mut, has_one = owner, close = owner)]
-    pub deed: Account<'info, Deed>,
-    pub owner: Signer<'info>
-}
-
-#[derive(Accounts)]
 pub struct EditDeed<'info> {
     #[account(mut, has_one = owner)]
     pub deed: Account<'info, Deed>,
     #[account(mut)]
+    pub owner: Signer<'info>
+}
+
+#[derive(Accounts)]
+pub struct DeleteDeed<'info> {
+    #[account(mut, has_one = owner, close = owner)]
+    pub deed: Account<'info, Deed>,
     pub owner: Signer<'info>
 }
 

@@ -11,6 +11,7 @@ describe('notariz', () => {
 
   const deedKeypair = anchor.web3.Keypair.generate();
   const deedCreator = program.provider.wallet;
+  const newDeedOwner = anchor.web3.Keypair.generate();
 
   it('🚀 Deed creation', async () => {
     // Add your test here.
@@ -33,7 +34,48 @@ describe('notariz', () => {
 
   });
 
+  it('🚀 Editing withdrawal period', async () => {
+    const withdrawal_period = 10;
+
+    await program.rpc.editWithdrawalPeriod(withdrawal_period, {
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey
+      }
+    })
+
+    let deedAccount = await program.account.deed.fetch(deedKeypair.publicKey);
+
+    expect(deedAccount.withdrawalPeriod).to.equal(10);
+
+  });
+
+  it('🚀 Editing deed owner', async () => {
+
+    await program.rpc.editOwner(newDeedOwner.publicKey, {
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey
+      }
+    })
+
+    let deedAccount = await program.account.deed.fetch(deedKeypair.publicKey);
+
+    expect(deedAccount.owner).to.eql(newDeedOwner.publicKey);
+
+  });
+
   it('🚀 Deed deletion', async () => {
+    const deedKeypair = anchor.web3.Keypair.generate();
+
+    await program.rpc.createDeed({
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId
+      },
+      signers: [deedKeypair]
+    })
 
     await program.rpc.deleteDeed({
       accounts: {
