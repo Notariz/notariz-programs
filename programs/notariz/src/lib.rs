@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::system_program;
 use anchor_lang::solana_program::system_instruction;
+use anchor_lang::solana_program;
 
 declare_id!("DFtRYEj6CB8xF6MkukkqnCxgiku7K2cJbSxsaHQWogdE");
 
@@ -18,6 +19,32 @@ pub mod notariz {
         deed.last_seen = clock.unix_timestamp;
 
         Ok(())
+    }
+
+    pub fn withdraw_deed_lamports(ctx: Context<WithdrawDeedLamports>, lamports_to_send: u64) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        let owner: &Signer = &mut ctx.accounts.owner;
+        let clock: Clock = Clock::get().unwrap();
+        
+        deed.last_seen = clock.unix_timestamp;
+
+        if deed.to_account_info().lamports() < lamports_to_send {
+            return Err(NotarizErrorCode::LamportTransferError.into());
+        };
+
+        let ix = system_instruction::transfer(
+            &deed.key(),
+            &owner.key(),
+            lamports_to_send,
+        );
+
+        solana_program::program::invoke(
+            &ix,
+            &[
+                deed.to_account_info(),
+                owner.to_account_info(),
+            ],
+        )
     }
 
     pub fn edit_withdrawal_period(ctx: Context<EditDeed>, withdrawal_period: i64) -> ProgramResult {
@@ -53,7 +80,7 @@ pub mod notariz {
         deed.last_seen = clock.unix_timestamp;
         deed.left_to_be_shared -= percentage;
 
-        emergency.from_deed = deed.key();
+        emergency.upstream_deed = deed.key();
         emergency.owner = *owner.key;
         emergency.receiver = receiver;
         emergency.percentage += percentage;
@@ -89,11 +116,11 @@ pub mod notariz {
 
     pub fn redeem_emergency(ctx: Context<RedeemEmergency>) -> ProgramResult {
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
-        let deed: &mut AccountInfo = &mut ctx.accounts.deed;
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
 
         let clock: Clock = Clock::get().unwrap();
         let receiver: &Signer = &ctx.accounts.receiver;
-        let lamports_to_send = deed.lamports() * u64::from(emergency.percentage) / 100;
+        let lamports_to_send = deed.to_account_info().lamports() * u64::from(emergency.percentage) / 100;
 
         if emergency.claimed_timestamp == 0 {
             return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into())
@@ -103,7 +130,7 @@ pub mod notariz {
             return Err(NotarizErrorCode::RedeemTimestampError.into())
         }
 
-        system_instruction::transfer(&emergency.from_deed.key(), &receiver.key(), lamports_to_send);
+        system_instruction::transfer(&deed.key(), &receiver.key(), lamports_to_send);
 
         Ok(())
     }
@@ -114,6 +141,16 @@ pub struct CreateDeed<'info> {
     #[account(init, payer = owner, space = Deed::LEN)] // The deed owner pays for the deed account's rent
     pub deed: Account<'info, Deed>,
     #[account(mut)] // Defines the amount of money stored in a deed account as mutable 
+    pub owner: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>
+}
+
+#[derive(Accounts)]
+pub struct WithdrawDeedLamports<'info> {
+    #[account(mut)] // The deed owner pays for the deed account's rent
+    pub deed: Account<'info, Deed>,
+    #[account(mut)]
     pub owner: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
     pub system_program: Program<'info, System>
@@ -131,6 +168,7 @@ pub struct EditDeed<'info> {
 pub struct DeleteDeed<'info> {
     #[account(mut, has_one = owner, close = owner)]
     pub deed: Account<'info, Deed>,
+    #[account(mut)]
     pub owner: Signer<'info>
 }
 
@@ -163,17 +201,15 @@ pub struct ClaimEmergency<'info> {
     #[account(mut, has_one = receiver)]
     pub emergency: Account<'info, Emergency>,
     #[account(mut)]
-    pub receiver: Signer<'info>,
-    #[account(address = system_program::ID)] // Checks the system program is the actual one
-    pub system_program: Program<'info, System>
+    pub receiver: Signer<'info>
 }
 
 #[derive(Accounts)] 
 pub struct RedeemEmergency<'info> {
     #[account(mut, has_one = receiver, close = receiver)]
     pub emergency: Account<'info, Emergency>,
-    #[account(address = emergency.from_deed)]
-    pub deed: AccountInfo<'info>,
+    #[account(address = emergency.upstream_deed)]
+    pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub receiver: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
@@ -206,7 +242,7 @@ impl Deed {
 #[account]
 #[derive(Default)]
 pub struct Emergency {
-    pub from_deed: Pubkey,
+    pub upstream_deed: Pubkey,
     pub owner: Pubkey,
     pub receiver: Pubkey,
     pub percentage: u8,
@@ -227,7 +263,7 @@ impl Emergency {
 #[account]
 #[derive(Default)]
 pub struct Recovery {
-    pub from_deed: Pubkey,
+    pub upstream_deed: Pubkey,
     pub owner: Pubkey,
     pub receiver: Pubkey
 }
