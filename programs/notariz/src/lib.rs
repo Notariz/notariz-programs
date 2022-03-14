@@ -24,16 +24,14 @@ pub mod notariz {
         lamports_to_send: u64,
     ) -> ProgramResult {
 
-        let deed: &mut AccountInfo = &mut ctx.accounts.deed;
-        let owner: &mut AccountInfo = &mut ctx.accounts.owner;
-        let clock: Clock = Clock::get().unwrap();
-        //deed.last_seen = clock.unix_timestamp;
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        let owner: &Signer = &mut ctx.accounts.owner;
 
         if deed.to_account_info().lamports() < lamports_to_send {
             return Err(NotarizErrorCode::LamportTransferError.into());
         };
 
-        transfer_lamports(deed: &mut AccountInfo, owner: &mut AccountInfo, lamports_to_send: u64)
+        transfer_lamports(&mut deed.to_account_info(), &mut owner.to_account_info(), lamports_to_send)
 
     }
 
@@ -124,24 +122,9 @@ pub mod notariz {
             return Err(NotarizErrorCode::RedeemTimestampError.into());
         }
 
-        system_instruction::transfer(&deed.key(), &receiver.key(), lamports_to_send);
+        // system_instruction::transfer(&deed.key(), &receiver.key(), lamports_to_send);
+        transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send);
 
-        Ok(())
-    }
-
-    pub fn transfer_lamports(
-        src: &mut AccountInfo, // we better own this account though
-        dst: &mut AccountInfo,
-        amount: u64,
-    ) -> ProgramResult {
-        **src.try_borrow_mut_lamports()? = src
-            .lamports()
-            .checked_sub(amount)
-            .ok_or(ProgramError::InvalidArgument)?;
-        **dst.try_borrow_mut_lamports()? = dst
-            .lamports()
-            .checked_add(amount)
-            .ok_or(ProgramError::InvalidArgument)?;
         Ok(())
     }
 }
@@ -160,9 +143,9 @@ pub struct CreateDeed<'info> {
 #[derive(Accounts)]
 pub struct WithdrawDeedLamports<'info> {
     #[account(mut)] // The deed owner pays for the deed account's rent
-    pub deed: AccountInfo<'info>,
+    pub deed: Account<'info, Deed>,
     #[account(mut)]
-    pub owner: AccountInfo<'info>,
+    pub owner: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
     pub system_program: Program<'info, System>,
 }
@@ -284,6 +267,22 @@ const RECOVERY_LENGTH: usize = 3 * PUBLIC_KEY_LENGTH;
 
 impl Recovery {
     const LEN: usize = DISCRIMINATOR_LENGTH + RECOVERY_LENGTH;
+}
+
+pub fn transfer_lamports(
+    src: &mut AccountInfo, // we better own this account though
+    dst: &mut AccountInfo,
+    amount: u64,
+) -> ProgramResult {
+    **src.try_borrow_mut_lamports()? = src
+        .lamports()
+        .checked_sub(amount)
+        .ok_or(ProgramError::InvalidArgument)?;
+    **dst.try_borrow_mut_lamports()? = dst
+        .lamports()
+        .checked_add(amount)
+        .ok_or(ProgramError::InvalidArgument)?;
+    Ok(())
 }
 
 #[error]

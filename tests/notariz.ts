@@ -1,4 +1,4 @@
-import * as anchor from "@project-serum/anchor";
+  import * as anchor from "@project-serum/anchor";
 import { Program, BN } from "@project-serum/anchor";
 import {
   Transaction,
@@ -277,7 +277,7 @@ describe("notariz", () => {
     let emergencyAccount = await program.account.emergency.fetch(
       newEmergencyKeypair.publicKey
     );
-    assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) === 1);
+    assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) > 0);
   });
 
   it("🚀 Redeeming an emergency transfer", async () => {
@@ -334,7 +334,10 @@ describe("notariz", () => {
       let emergencyAccount = await program.account.emergency.fetch(
         newEmergencyKeypair.publicKey
       );
-    assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) === 1);
+
+    // console.log("Claimed timestamp: ", emergencyAccount.claimedTimestamp.toString());
+
+    assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) > 0);
     
     await new Promise((r) => setTimeout(r, 10000));
 
@@ -362,8 +365,9 @@ describe("notariz", () => {
     let senderAccountInfoAfterTransfer =
       await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey);
 
-    // console.log("Deed account after transfer: ", await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey).catch(console.log));
-    
+    console.log("Deed account after transfer: ", await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey).catch(console.log));
+    console.log("Receiver account after transfer: ", receiverAccountInfoAfterTransfer);
+
     assert.ok(
       receiverAccountInfoAfterTransfer.lamports >
         receiverAccountInfoBeforeTransfer.lamports
