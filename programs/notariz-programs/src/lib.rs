@@ -122,13 +122,13 @@ pub struct EditDeed<'info> {
 #[account]
 #[derive(Default)]
 pub struct Deed {
-    // TODO: add a SOL storage
+    pub balance: lamport,
     pub owner_address: Pubkey,
     pub recovery_address: Option<Pubkey>,
     pub last_seen: i64, // couldn't find UnixTimestamp location
     pub total_shares: u32,
     pub time_until_expiration: Option<u32>, // seconds
-    // hoping there will be no conflict with timestamp (i64) additions
+    // hoping there will be no conflict with timestamp (i64) calculation
     pub inheritance: Vec<Inheritor>
 }
 
