@@ -122,7 +122,7 @@ pub struct EditDeed<'info> {
 #[account]
 #[derive(Default)]
 pub struct Deed {
-    pub balance: lamport,
+    //pub balance: lamport,
     pub owner_address: Pubkey,
     pub recovery_address: Option<Pubkey>,
     pub last_seen: i64, // couldn't find UnixTimestamp location
