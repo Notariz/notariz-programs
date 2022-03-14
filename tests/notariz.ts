@@ -269,8 +269,7 @@ describe("notariz", () => {
     await program.rpc.claimEmergency({
       accounts: {
         emergency: newEmergencyKeypair.publicKey,
-        receiver: emergencyReceiver.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        receiver: emergencyReceiver.publicKey
       },
       signers: [emergencyReceiver]
     });
