@@ -376,7 +376,7 @@ pub fn transfer_lamports(
 pub enum NotarizErrorCode {
     #[msg("The account does not have the lamports it is willing to transfer")]
     LamportTransferError,
-    #[msg("You must wait more before to claim.")]
+    #[msg("You must wait longer before claiming.")]
     DeedWithdrawalTimeout,
     #[msg("This emergency has yet to be claimed.")]
     ClaimNeededToRedeem,
