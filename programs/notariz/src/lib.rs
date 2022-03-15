@@ -56,7 +56,7 @@ pub mod notariz {
         Ok(())
     }
 
-    pub fn delete_deed(_ctx: Context<DeleteDeed>) -> ProgramResult {
+    pub fn delete_deed(ctx: Context<DeleteDeed>) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         deed.last_seen = Clock::get()?.unix_timestamp;
         Ok(())
@@ -243,6 +243,8 @@ pub struct DeleteEmergency<'info> {
 pub struct ClaimEmergency<'info> {
     #[account(mut, has_one = receiver)]
     pub emergency: Account<'info, Emergency>,
+    #[account(address = emergency.upstream_deed)]
+    pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub receiver: Signer<'info>,
 }

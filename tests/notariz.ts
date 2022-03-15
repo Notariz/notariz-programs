@@ -278,7 +278,8 @@ describe("notariz", () => {
     await program.rpc.claimEmergency({
       accounts: {
         emergency: newEmergencyKeypair.publicKey,
-        receiver: emergencyReceiver.publicKey
+        receiver: emergencyReceiver.publicKey,
+        deed: newDeedKeypair.publicKey
       },
       signers: [emergencyReceiver]
     });
