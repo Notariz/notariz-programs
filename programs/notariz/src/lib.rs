@@ -233,7 +233,7 @@ pub struct ClaimEmergency<'info> {
 pub struct RedeemEmergency<'info> {
     #[account(mut, has_one = receiver, close = receiver)]
     pub emergency: Account<'info, Emergency>,
-    #[account(address = emergency.upstream_deed)]
+    #[account(mut, address = emergency.upstream_deed)]
     pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub receiver: Signer<'info>,
@@ -269,7 +269,7 @@ pub struct DeleteRecovery<'info> {
 pub struct RedeemRecovery<'info> {
     #[account(mut, has_one = receiver, close = receiver)]
     pub recovery: Account<'info, Recovery>,
-    #[account(address = recovery.upstream_deed)]
+    #[account(mut, address = recovery.upstream_deed)]
     pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub receiver: Signer<'info>,
