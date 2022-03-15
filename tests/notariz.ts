@@ -38,13 +38,13 @@ describe("notariz", () => {
   console.log("Emergency receiver account address: ", emergencyReceiver.publicKey.toBase58())
 
   const recoveryKeypair = anchor.web3.Keypair.generate();
-  console.log("Recovery account address: ", emergencyKeypair.publicKey.toBase58())
+  console.log("Recovery account address: ", recoveryKeypair.publicKey.toBase58())
 
   const newRecoveryKeypair = anchor.web3.Keypair.generate();
-  console.log("Recovery account address: ", emergencyKeypair.publicKey.toBase58())
+  console.log("New Recovery account address: ", newRecoveryKeypair.publicKey.toBase58())
 
   const recoveryReceiver = anchor.web3.Keypair.generate();
-  console.log("Recovery receiver account address: ", emergencyReceiver.publicKey.toBase58())
+  console.log("Recovery receiver account address: ", recoveryReceiver.publicKey.toBase58())
 
   before((done) => {
     program.provider.connection
