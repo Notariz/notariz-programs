@@ -37,6 +37,15 @@ describe("notariz", () => {
   const emergencyReceiver = anchor.web3.Keypair.generate();
   console.log("Emergency receiver account address: ", emergencyReceiver.publicKey.toBase58())
 
+  const recoveryKeypair = anchor.web3.Keypair.generate();
+  console.log("Recovery account address: ", emergencyKeypair.publicKey.toBase58())
+
+  const newRecoveryKeypair = anchor.web3.Keypair.generate();
+  console.log("Recovery account address: ", emergencyKeypair.publicKey.toBase58())
+
+  const recoveryReceiver = anchor.web3.Keypair.generate();
+  console.log("Recovery receiver account address: ", emergencyReceiver.publicKey.toBase58())
+
   before((done) => {
     program.provider.connection
       .requestAirdrop(deedCreator.publicKey, 1000000000)
@@ -374,6 +383,160 @@ describe("notariz", () => {
     );
     assert.ok(
       senderAccountInfoAfterTransfer.lamports <
+        senderAccountInfoBeforeTransfer.lamports
+    );
+
+  });
+
+  it("🚀 Adding a recovery", async () => {
+
+    await program.rpc.createDeed({
+      accounts: {
+        deed: newDeedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [newDeedKeypair, deedCreator],
+    });
+
+    await program.rpc.addRecovery(recoveryReceiver.publicKey, {
+      accounts: {
+        recovery: recoveryKeypair.publicKey,
+        deed: newDeedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [recoveryKeypair, deedCreator],
+    });
+
+    let recoveryAccount = await program.account.recovery.fetch(
+        recoveryKeypair.publicKey
+    );
+
+    expect(recoveryAccount.owner).to.eql(deedCreator.publicKey);
+    expect(recoveryAccount.receiver).to.eql(recoveryReceiver.publicKey);
+
+  });
+
+  it("🚀 Deleting a recovery", async () => {
+    let deedAccountInfoBeforeRecoveryDeletion = await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey)
+    let deedCreatorAccountInfoBeforeRecoveryDeletion = await program.provider.connection.getAccountInfo(deedCreator.publicKey)
+
+    await program.rpc.deleteRecovery({
+      accounts: {
+        emergency: recoveryKeypair.publicKey,
+        deed: newDeedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [deedCreator],
+    });
+
+    let deedAccountInfoAfterRecoveryDeletion = await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey)
+    let deedCreatorAccountInfoAfterRecoveryDeletion = await program.provider.connection.getAccountInfo(deedCreator.publicKey)
+
+    const recoveryAccount = await program.account.emergency.fetchNullable(
+        recoveryKeypair.publicKey
+    );
+
+    expect(deedCreatorAccountInfoAfterRecoveryDeletion.lamports > deedCreatorAccountInfoBeforeRecoveryDeletion.lamports)
+    expect(deedAccountInfoAfterRecoveryDeletion.lamports > deedAccountInfoBeforeRecoveryDeletion.lamports)
+    expect(recoveryAccount === null);
+  });
+
+  it("🚀 Redeeming a recovery", async () => {
+    const lamportsToSend = 50000000;
+
+    await program.provider.send(
+        (() => {
+          const tx = new Transaction();
+          tx.add(
+              SystemProgram.transfer({
+                fromPubkey: deedCreator.publicKey,
+                toPubkey: newDeedKeypair.publicKey,
+                lamports: lamportsToSend,
+              })
+          );
+          return tx;
+        })(),
+        [deedCreator]
+    );
+
+    await program.provider.send(
+        (() => {
+          const tx = new Transaction();
+          tx.add(
+              SystemProgram.transfer({
+                fromPubkey: deedCreator.publicKey,
+                toPubkey: recoveryReceiver.publicKey,
+                lamports: lamportsToSend,
+              })
+          );
+          return tx;
+        })(),
+        [deedCreator]
+    );
+
+    // console.log("Deed account before transfer: ", await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey));
+
+    let receiverAccountInfoBeforeTransfer =
+        await program.provider.connection.getAccountInfo(
+            recoveryReceiver.publicKey
+        );
+    let senderAccountInfoBeforeTransfer =
+        await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey);
+
+    await program.rpc.addRecovery(recoveryReceiver.publicKey, {
+      accounts: {
+        recovery: newRecoveryKeypair.publicKey,
+        deed: newDeedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [recoveryKeypair, deedCreator],
+    });
+
+    let recoveryAccount = await program.account.recovery.fetch(
+        newRecoveryKeypair.publicKey
+    );
+
+    // console.log("Claimed timestamp: ", recoveryAccount.claimedTimestamp.toString());
+
+    assert.ok(recoveryAccount.claimedTimestamp.cmpn(0) > 0);
+
+    await program.rpc.redeemRecovery({
+      accounts: {
+        recovery: newRecoveryKeypair.publicKey,
+        receiver: recoveryReceiver.publicKey,
+        deed: newDeedKeypair.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [recoveryReceiver]
+    }).then((res) => program.provider.connection.confirmTransaction(res)).catch(console.log);
+
+    recoveryAccount = await program.account.emergency.fetchNullable(
+        newEmergencyKeypair.publicKey
+    );
+
+    expect(recoveryAccount === null);
+
+    let receiverAccountInfoAfterTransfer =
+        await program.provider.connection.getAccountInfo(
+            recoveryReceiver.publicKey
+        );
+
+    let senderAccountInfoAfterTransfer =
+        await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey);
+
+    console.log("Deed account after transfer: ", await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey).catch(console.log));
+    console.log("Receiver account after transfer: ", receiverAccountInfoAfterTransfer);
+
+    assert.ok(
+        receiverAccountInfoAfterTransfer.lamports >
+        receiverAccountInfoBeforeTransfer.lamports
+    );
+    assert.ok(
+        senderAccountInfoAfterTransfer.lamports <
         senderAccountInfoBeforeTransfer.lamports
     );
 
