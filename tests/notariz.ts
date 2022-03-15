@@ -390,15 +390,6 @@ describe("notariz", () => {
 
   it("🚀 Adding a recovery", async () => {
 
-    await program.rpc.createDeed({
-      accounts: {
-        deed: newDeedKeypair.publicKey,
-        owner: deedCreator.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      },
-      signers: [newDeedKeypair, deedCreator],
-    });
-
     await program.rpc.addRecovery(recoveryReceiver.publicKey, {
       accounts: {
         recovery: recoveryKeypair.publicKey,
