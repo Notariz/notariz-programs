@@ -127,6 +127,37 @@ pub mod notariz {
 
         Ok(())
     }
+
+    pub fn add_recovery(
+        ctx: Context<AddRecovery>,
+        receiver: Pubkey,
+    ) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        let recovery: &mut Account<Recovery> = &mut ctx.accounts.emergency;
+        let owner: &Signer = &ctx.accounts.owner;
+
+        deed.last_seen = Clock::get()?.unix_timestamp;
+        recovery.upstream_deed = deed.key();
+        recovery.owner = *owner.key;
+        recovery.receiver = receiver;
+
+        Ok(())
+    }
+
+    pub fn delete_recovery(ctx: Context<DeleteRecovery>) -> ProgramResult {
+        Ok(())
+    }
+
+    pub fn redeem_recovery(ctx: Context<RedeemRecovery>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+
+        let receiver: &Signer = &ctx.accounts.receiver;
+        let lamports_to_send = deed.to_account_info().lamports();
+
+        transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send);
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -203,6 +234,42 @@ pub struct RedeemEmergency<'info> {
     #[account(mut, has_one = receiver, close = receiver)]
     pub emergency: Account<'info, Emergency>,
     #[account(address = emergency.upstream_deed)]
+    pub deed: Account<'info, Deed>,
+    #[account(mut)]
+    pub receiver: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AddRecovery<'info> {
+    #[account(init, payer = owner, space = Recovery::LEN)]
+    pub recovery: Account<'info, Recovery>,
+    #[account(mut, has_one = owner)]
+    pub deed: Account<'info, Deed>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DeleteRecovery<'info> {
+    #[account(mut, has_one = owner, close = owner)]
+    pub recovery: Account<'info, Recovery>,
+    #[account(mut, has_one = owner)]
+    pub deed: Account<'info, Deed>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RedeemRecovery<'info> {
+    #[account(mut, has_one = receiver, close = receiver)]
+    pub recovery: Account<'info, Recovery>,
+    #[account(address = recovery.upstream_deed)]
     pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub receiver: Signer<'info>,
