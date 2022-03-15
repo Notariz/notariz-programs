@@ -491,10 +491,6 @@ describe("notariz", () => {
         newRecoveryKeypair.publicKey
     );
 
-    // console.log("Claimed timestamp: ", recoveryAccount.claimedTimestamp.toString());
-
-    assert.ok(recoveryAccount.claimedTimestamp.cmpn(0) > 0);
-
     await program.rpc.redeemRecovery({
       accounts: {
         recovery: newRecoveryKeypair.publicKey,
