@@ -523,8 +523,7 @@ describe("notariz", () => {
         receiverAccountInfoBeforeTransfer.lamports
     );
     assert.ok(
-        senderAccountInfoAfterTransfer.lamports <
-        senderAccountInfoBeforeTransfer.lamports
+        senderAccountInfoAfterTransfer === null
     );
 
   });
