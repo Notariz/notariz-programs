@@ -32,7 +32,6 @@ pub mod notariz {
         };
 
         transfer_lamports(&mut deed.to_account_info(), &mut owner.to_account_info(), lamports_to_send)
-
     }
 
     pub fn edit_withdrawal_period(ctx: Context<EditDeed>, withdrawal_period: i64) -> ProgramResult {
@@ -81,13 +80,13 @@ pub mod notariz {
         emergency.receiver = receiver;
         emergency.percentage += percentage;
         emergency.withdrawal_period = deed.withdrawal_period;
+        
         Ok(())
     }
 
     pub fn delete_emergency(ctx: Context<DeleteEmergency>) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
-        let lamports_to_send = emergency.to_account_info().lamports();
 
         deed.left_to_be_shared += emergency.percentage;
 
