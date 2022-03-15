@@ -484,7 +484,7 @@ describe("notariz", () => {
         owner: deedCreator.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
       },
-      signers: [recoveryKeypair, deedCreator],
+      signers: [newRecoveryKeypair, deedCreator],
     });
 
     let recoveryAccount = await program.account.recovery.fetch(
