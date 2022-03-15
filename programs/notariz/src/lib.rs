@@ -25,6 +25,8 @@ pub mod notariz {
     ) -> ProgramResult {
 
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
+
         let owner: &Signer = &mut ctx.accounts.owner;
 
         if deed.to_account_info().lamports() < lamports_to_send {
@@ -54,7 +56,9 @@ pub mod notariz {
         Ok(())
     }
 
-    pub fn delete_deed(_ctx: Context<DeleteDeed>) -> ProgramResult {
+    pub fn delete_deed(ctx: Context<DeleteDeed>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
         Ok(())
     }
 
@@ -86,6 +90,7 @@ pub mod notariz {
 
     pub fn delete_emergency(ctx: Context<DeleteEmergency>) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
 
         deed.left_to_be_shared += emergency.percentage;
@@ -94,11 +99,12 @@ pub mod notariz {
     }
 
     pub fn claim_emergency(ctx: Context<ClaimEmergency>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
         let clock: Clock = Clock::get().unwrap();
 
-        if emergency.claimed_timestamp > 0 {
-            return Err(NotarizErrorCode::ClaimTimestampGreaterThanZeroError.into());
+        if clock.unix_timestamp - deed.last_seen < deed.withdrawal_period {
+            return Err(NotarizErrorCode::DeedWithdrawalTimeout.into());
         }
 
         emergency.claimed_timestamp = clock.unix_timestamp;
@@ -115,8 +121,12 @@ pub mod notariz {
         let lamports_to_send =
             deed.to_account_info().lamports() * u64::from(emergency.percentage) / 100;
 
-        if emergency.claimed_timestamp == 0 {
-            return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into());
+        // if emergency.claimed_timestamp == 0 {
+        //     return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into());
+        // }
+
+        if emergency.claimed_timestamp < deed.last_seen + deed.withdrawal_period {
+            return Err(NotarizErrorCode::ClaimNeededToRedeem.into());
         }
 
         if clock.unix_timestamp - emergency.claimed_timestamp < emergency.withdrawal_period {
@@ -125,6 +135,45 @@ pub mod notariz {
 
         transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send);
 
+        Ok(())
+    }
+
+    pub fn add_recovery(
+        ctx: Context<AddRecovery>,
+        receiver: Pubkey,
+    ) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        let recovery: &mut Account<Recovery> = &mut ctx.accounts.recovery;
+        let owner: &Signer = &ctx.accounts.owner;
+
+        deed.last_seen = Clock::get()?.unix_timestamp;
+        recovery.upstream_deed = deed.key();
+        recovery.owner = *owner.key;
+        recovery.receiver = receiver;
+
+        Ok(())
+    }
+
+    pub fn delete_recovery(ctx: Context<DeleteRecovery>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
+        Ok(())
+    }
+
+    pub fn redeem_recovery(ctx: Context<RedeemRecovery>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+
+        let receiver: &Signer = &ctx.accounts.receiver;
+        let lamports_to_send = deed.to_account_info().lamports();
+
+        transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send);
+
+        Ok(())
+    }
+
+    pub fn keepAlive(ctx: Context<EditDeed>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
         Ok(())
     }
 }
@@ -194,6 +243,8 @@ pub struct DeleteEmergency<'info> {
 pub struct ClaimEmergency<'info> {
     #[account(mut, has_one = receiver)]
     pub emergency: Account<'info, Emergency>,
+    #[account(address = emergency.upstream_deed)]
+    pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub receiver: Signer<'info>,
 }
@@ -202,7 +253,43 @@ pub struct ClaimEmergency<'info> {
 pub struct RedeemEmergency<'info> {
     #[account(mut, has_one = receiver, close = receiver)]
     pub emergency: Account<'info, Emergency>,
-    #[account(address = emergency.upstream_deed)]
+    #[account(mut, address = emergency.upstream_deed)]
+    pub deed: Account<'info, Deed>,
+    #[account(mut)]
+    pub receiver: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AddRecovery<'info> {
+    #[account(init, payer = owner, space = Recovery::LEN)]
+    pub recovery: Account<'info, Recovery>,
+    #[account(mut, has_one = owner)]
+    pub deed: Account<'info, Deed>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct DeleteRecovery<'info> {
+    #[account(mut, has_one = owner, close = owner)]
+    pub recovery: Account<'info, Recovery>,
+    #[account(mut, has_one = owner)]
+    pub deed: Account<'info, Deed>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(address = system_program::ID)] // Checks the system program is the actual one
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RedeemRecovery<'info> {
+    #[account(mut, has_one = receiver, close = receiver)]
+    pub recovery: Account<'info, Recovery>,
+    #[account(mut, address = recovery.upstream_deed)]
     pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub receiver: Signer<'info>,
@@ -289,10 +376,10 @@ pub fn transfer_lamports(
 pub enum NotarizErrorCode {
     #[msg("The account does not have the lamports it is willing to transfer")]
     LamportTransferError,
-    #[msg("This emergency has already been claimed.")]
-    ClaimTimestampGreaterThanZeroError,
+    #[msg("You must wait longer before claiming.")]
+    DeedWithdrawalTimeout,
     #[msg("This emergency has yet to be claimed.")]
-    ClaimTimestampEqualsToZeroError,
+    ClaimNeededToRedeem,
     #[msg("This emergency cannot be redeemed yet.")]
     RedeemTimestampError,
     #[msg("Percentage attribution is not compatible with the current deed distribution.")]
