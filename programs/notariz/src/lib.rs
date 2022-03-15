@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::system_program;
 use anchor_lang::solana_program::system_instruction;
-use anchor_lang::solana_program;
+use anchor_lang::solana_program::system_program;
 
 declare_id!("DFtRYEj6CB8xF6MkukkqnCxgiku7K2cJbSxsaHQWogdE");
 
@@ -12,7 +11,6 @@ pub mod notariz {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let owner: &Signer = &ctx.accounts.owner;
         let clock: Clock = Clock::get().unwrap();
-        
         deed.owner = *owner.key;
         deed.withdrawal_period = 2 * 3600 * 24; // Day-to-second conversion
         deed.left_to_be_shared = 100;
@@ -21,30 +19,20 @@ pub mod notariz {
         Ok(())
     }
 
-    pub fn withdraw_deed_lamports(ctx: Context<WithdrawDeedLamports>, lamports_to_send: u64) -> ProgramResult {
+    pub fn withdraw_deed_lamports(
+        ctx: Context<WithdrawDeedLamports>,
+        lamports_to_send: u64,
+    ) -> ProgramResult {
+
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let owner: &Signer = &mut ctx.accounts.owner;
-        let clock: Clock = Clock::get().unwrap();
-        
-        deed.last_seen = clock.unix_timestamp;
 
         if deed.to_account_info().lamports() < lamports_to_send {
             return Err(NotarizErrorCode::LamportTransferError.into());
         };
 
-        let ix = system_instruction::transfer(
-            &deed.key(),
-            &owner.key(),
-            lamports_to_send,
-        );
+        transfer_lamports(&mut deed.to_account_info(), &mut owner.to_account_info(), lamports_to_send)
 
-        solana_program::program::invoke(
-            &ix,
-            &[
-                deed.to_account_info(),
-                owner.to_account_info(),
-            ],
-        )
     }
 
     pub fn edit_withdrawal_period(ctx: Context<EditDeed>, withdrawal_period: i64) -> ProgramResult {
@@ -71,7 +59,11 @@ pub mod notariz {
         Ok(())
     }
 
-    pub fn add_emergency(ctx: Context<AddEmergency>, receiver: Pubkey, percentage: u8) -> ProgramResult {
+    pub fn add_emergency(
+        ctx: Context<AddEmergency>,
+        receiver: Pubkey,
+        percentage: u8,
+    ) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
         let owner: &Signer = &ctx.accounts.owner;
@@ -85,7 +77,6 @@ pub mod notariz {
         emergency.receiver = receiver;
         emergency.percentage += percentage;
         emergency.withdrawal_period = deed.withdrawal_period;
-                
         Ok(())
     }
 
@@ -106,7 +97,7 @@ pub mod notariz {
         let clock: Clock = Clock::get().unwrap();
 
         if emergency.claimed_timestamp > 0 {
-            return Err(NotarizErrorCode::ClaimTimestampGreaterThanZeroError.into())
+            return Err(NotarizErrorCode::ClaimTimestampGreaterThanZeroError.into());
         }
 
         emergency.claimed_timestamp = clock.unix_timestamp;
@@ -120,17 +111,19 @@ pub mod notariz {
 
         let clock: Clock = Clock::get().unwrap();
         let receiver: &Signer = &ctx.accounts.receiver;
-        let lamports_to_send = deed.to_account_info().lamports() * u64::from(emergency.percentage) / 100;
+        let lamports_to_send =
+            deed.to_account_info().lamports() * u64::from(emergency.percentage) / 100;
 
         if emergency.claimed_timestamp == 0 {
-            return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into())
+            return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into());
         }
 
         if clock.unix_timestamp - emergency.claimed_timestamp < emergency.withdrawal_period {
-            return Err(NotarizErrorCode::RedeemTimestampError.into())
+            return Err(NotarizErrorCode::RedeemTimestampError.into());
         }
 
-        system_instruction::transfer(&deed.key(), &receiver.key(), lamports_to_send);
+        // system_instruction::transfer(&deed.key(), &receiver.key(), lamports_to_send);
+        transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send);
 
         Ok(())
     }
@@ -138,12 +131,13 @@ pub mod notariz {
 
 #[derive(Accounts)]
 pub struct CreateDeed<'info> {
-    #[account(init, payer = owner, space = Deed::LEN)] // The deed owner pays for the deed account's rent
+    #[account(init, payer = owner, space = Deed::LEN)]
+    // The deed owner pays for the deed account's rent
     pub deed: Account<'info, Deed>,
-    #[account(mut)] // Defines the amount of money stored in a deed account as mutable 
+    #[account(mut)] // Defines the amount of money stored in a deed account as mutable
     pub owner: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -153,7 +147,7 @@ pub struct WithdrawDeedLamports<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -161,7 +155,7 @@ pub struct EditDeed<'info> {
     #[account(mut, has_one = owner)]
     pub deed: Account<'info, Deed>,
     #[account(mut)]
-    pub owner: Signer<'info>
+    pub owner: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -169,10 +163,10 @@ pub struct DeleteDeed<'info> {
     #[account(mut, has_one = owner, close = owner)]
     pub deed: Account<'info, Deed>,
     #[account(mut)]
-    pub owner: Signer<'info>
+    pub owner: Signer<'info>,
 }
 
-#[derive(Accounts)] 
+#[derive(Accounts)]
 pub struct AddEmergency<'info> {
     #[account(init, payer = owner, space = Emergency::LEN)]
     pub emergency: Account<'info, Emergency>,
@@ -181,10 +175,10 @@ pub struct AddEmergency<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)] 
+#[derive(Accounts)]
 pub struct DeleteEmergency<'info> {
     #[account(mut, has_one = owner, close = owner)]
     pub emergency: Account<'info, Emergency>,
@@ -193,18 +187,18 @@ pub struct DeleteEmergency<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)] 
+#[derive(Accounts)]
 pub struct ClaimEmergency<'info> {
     #[account(mut, has_one = receiver)]
     pub emergency: Account<'info, Emergency>,
     #[account(mut)]
-    pub receiver: Signer<'info>
+    pub receiver: Signer<'info>,
 }
 
-#[derive(Accounts)] 
+#[derive(Accounts)]
 pub struct RedeemEmergency<'info> {
     #[account(mut, has_one = receiver, close = receiver)]
     pub emergency: Account<'info, Emergency>,
@@ -213,7 +207,7 @@ pub struct RedeemEmergency<'info> {
     #[account(mut)]
     pub receiver: Signer<'info>,
     #[account(address = system_program::ID)] // Checks the system program is the actual one
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }
 
 #[account]
@@ -221,7 +215,7 @@ pub struct RedeemEmergency<'info> {
 pub struct Deed {
     pub owner: Pubkey,
     pub last_seen: i64,
-    pub left_to_be_shared: u8, // Percentage comprised in [1;100]
+    pub left_to_be_shared: u8,  // Percentage comprised in [1;100]
     pub withdrawal_period: i64, // In seconds (up to 136 years)
 }
 
@@ -231,12 +225,14 @@ const WITHDRAWAL_PERIOD_LENGTH: usize = 8;
 const LEFT_TO_BE_SHARED_LENGTH: usize = 1;
 const DISCRIMINATOR_LENGTH: usize = 8;
 
-const DEED_LENGTH: usize = PUBLIC_KEY_LENGTH + TIMESTAMP_LENGTH + WITHDRAWAL_PERIOD_LENGTH + LEFT_TO_BE_SHARED_LENGTH + DISCRIMINATOR_LENGTH;
+const DEED_LENGTH: usize = PUBLIC_KEY_LENGTH
+    + TIMESTAMP_LENGTH
+    + WITHDRAWAL_PERIOD_LENGTH
+    + LEFT_TO_BE_SHARED_LENGTH
+    + DISCRIMINATOR_LENGTH;
 
 impl Deed {
-    const LEN: usize =
-    DISCRIMINATOR_LENGTH +
-    DEED_LENGTH;
+    const LEN: usize = DISCRIMINATOR_LENGTH + DEED_LENGTH;
 }
 
 #[account]
@@ -247,17 +243,16 @@ pub struct Emergency {
     pub receiver: Pubkey,
     pub percentage: u8,
     pub withdrawal_period: i64,
-    pub claimed_timestamp: i64
+    pub claimed_timestamp: i64,
 }
 
 const PERCENTAGE_LENGTH: usize = 1;
 
-const EMERGENCY_LENGTH: usize = 3 * PUBLIC_KEY_LENGTH + PERCENTAGE_LENGTH + WITHDRAWAL_PERIOD_LENGTH + TIMESTAMP_LENGTH;
+const EMERGENCY_LENGTH: usize =
+    3 * PUBLIC_KEY_LENGTH + PERCENTAGE_LENGTH + WITHDRAWAL_PERIOD_LENGTH + TIMESTAMP_LENGTH;
 
 impl Emergency {
-    const LEN: usize = 
-    DISCRIMINATOR_LENGTH +
-    EMERGENCY_LENGTH;
+    const LEN: usize = DISCRIMINATOR_LENGTH + EMERGENCY_LENGTH;
 }
 
 #[account]
@@ -265,17 +260,30 @@ impl Emergency {
 pub struct Recovery {
     pub upstream_deed: Pubkey,
     pub owner: Pubkey,
-    pub receiver: Pubkey
+    pub receiver: Pubkey,
 }
 
-const RECOVERY_LENGTH: usize = 3 * PUBLIC_KEY_LENGTH; 
+const RECOVERY_LENGTH: usize = 3 * PUBLIC_KEY_LENGTH;
 
 impl Recovery {
-    const LEN: usize =
-    DISCRIMINATOR_LENGTH +
-    RECOVERY_LENGTH;
+    const LEN: usize = DISCRIMINATOR_LENGTH + RECOVERY_LENGTH;
 }
 
+pub fn transfer_lamports(
+    src: &mut AccountInfo, // we better own this account though
+    dst: &mut AccountInfo,
+    amount: u64,
+) -> ProgramResult {
+    **src.try_borrow_mut_lamports()? = src
+        .lamports()
+        .checked_sub(amount)
+        .ok_or(ProgramError::InvalidArgument)?;
+    **dst.try_borrow_mut_lamports()? = dst
+        .lamports()
+        .checked_add(amount)
+        .ok_or(ProgramError::InvalidArgument)?;
+    Ok(())
+}
 
 #[error]
 pub enum NotarizErrorCode {
@@ -286,5 +294,5 @@ pub enum NotarizErrorCode {
     #[msg("This emergency has yet to be claimed.")]
     ClaimTimestampEqualsToZeroError,
     #[msg("This emergency cannot be redeemed yet.")]
-    RedeemTimestampError
+    RedeemTimestampError,
 }
