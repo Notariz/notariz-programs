@@ -133,7 +133,7 @@ pub mod notariz {
         receiver: Pubkey,
     ) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
-        let recovery: &mut Account<Recovery> = &mut ctx.accounts.emergency;
+        let recovery: &mut Account<Recovery> = &mut ctx.accounts.recovery;
         let owner: &Signer = &ctx.accounts.owner;
 
         deed.last_seen = Clock::get()?.unix_timestamp;

@@ -424,7 +424,7 @@ describe("notariz", () => {
 
     await program.rpc.deleteRecovery({
       accounts: {
-        emergency: recoveryKeypair.publicKey,
+        recovery: recoveryKeypair.publicKey,
         deed: newDeedKeypair.publicKey,
         owner: deedCreator.publicKey,
         systemProgram: anchor.web3.SystemProgram.programId,
