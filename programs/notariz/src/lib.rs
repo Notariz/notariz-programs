@@ -25,6 +25,8 @@ pub mod notariz {
     ) -> ProgramResult {
 
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
+
         let owner: &Signer = &mut ctx.accounts.owner;
 
         if deed.to_account_info().lamports() < lamports_to_send {
@@ -55,6 +57,8 @@ pub mod notariz {
     }
 
     pub fn delete_deed(_ctx: Context<DeleteDeed>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
         Ok(())
     }
 
@@ -86,6 +90,7 @@ pub mod notariz {
 
     pub fn delete_emergency(ctx: Context<DeleteEmergency>) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
 
         deed.left_to_be_shared += emergency.percentage;
@@ -94,11 +99,12 @@ pub mod notariz {
     }
 
     pub fn claim_emergency(ctx: Context<ClaimEmergency>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
         let clock: Clock = Clock::get().unwrap();
 
-        if emergency.claimed_timestamp > 0 {
-            return Err(NotarizErrorCode::ClaimTimestampGreaterThanZeroError.into());
+        if clock.unix_timestamp - deed.last_seen < deed.withdrawal_period {
+            return Err(NotarizErrorCode::DeedWithdrawalTimeout.into());
         }
 
         emergency.claimed_timestamp = clock.unix_timestamp;
@@ -115,8 +121,12 @@ pub mod notariz {
         let lamports_to_send =
             deed.to_account_info().lamports() * u64::from(emergency.percentage) / 100;
 
-        if emergency.claimed_timestamp == 0 {
-            return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into());
+        // if emergency.claimed_timestamp == 0 {
+        //     return Err(NotarizErrorCode::ClaimTimestampEqualsToZeroError.into());
+        // }
+
+        if emergency.claimed_timestamp < deed.last_seen + deed.withdrawal_period {
+            return Err(NotarizErrorCode::ClaimNeededToRedeem.into());
         }
 
         if clock.unix_timestamp - emergency.claimed_timestamp < emergency.withdrawal_period {
@@ -145,6 +155,8 @@ pub mod notariz {
     }
 
     pub fn delete_recovery(ctx: Context<DeleteRecovery>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
         Ok(())
     }
 
@@ -156,6 +168,12 @@ pub mod notariz {
 
         transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send);
 
+        Ok(())
+    }
+
+    pub fn keepAlive(ctx: Context<EditDeed>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        deed.last_seen = Clock::get()?.unix_timestamp;
         Ok(())
     }
 }
@@ -356,10 +374,10 @@ pub fn transfer_lamports(
 pub enum NotarizErrorCode {
     #[msg("The account does not have the lamports it is willing to transfer")]
     LamportTransferError,
-    #[msg("This emergency has already been claimed.")]
-    ClaimTimestampGreaterThanZeroError,
+    #[msg("You must wait more before to claim.")]
+    DeedWithdrawalTimeout,
     #[msg("This emergency has yet to be claimed.")]
-    ClaimTimestampEqualsToZeroError,
+    ClaimNeededToRedeem,
     #[msg("This emergency cannot be redeemed yet.")]
     RedeemTimestampError,
     #[msg("Percentage attribution is not compatible with the current deed distribution.")]
