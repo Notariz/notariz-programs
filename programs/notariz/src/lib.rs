@@ -70,6 +70,10 @@ pub mod notariz {
         let clock: Clock = Clock::get().unwrap();
 
         deed.last_seen = clock.unix_timestamp;
+        
+        if deed.left_to_be_shared - percentage < 0 {
+            return Err(NotarizErrorCode::PercentageError.into());
+        }
         deed.left_to_be_shared -= percentage;
 
         emergency.upstream_deed = deed.key();
@@ -295,4 +299,6 @@ pub enum NotarizErrorCode {
     ClaimTimestampEqualsToZeroError,
     #[msg("This emergency cannot be redeemed yet.")]
     RedeemTimestampError,
+    #[msg("Percentage attribution is not compatible with the current deed distribution.")]
+    PercentageError,
 }
