@@ -1,9 +1,6 @@
-  import * as anchor from "@project-serum/anchor";
+import * as anchor from "@project-serum/anchor";
 import { Program, BN } from "@project-serum/anchor";
-import {
-  Transaction,
-  SystemProgram,
-} from "@solana/web3.js";
+import { Transaction, SystemProgram } from "@solana/web3.js";
 
 import { Notariz } from "../target/types/notariz";
 import { expect } from "chai";
@@ -17,34 +14,61 @@ describe("notariz", () => {
   const program = anchor.workspace.Notariz as Program<Notariz>;
 
   const deedKeypair = anchor.web3.Keypair.generate();
-  console.log("Deed account address: ", deedKeypair.publicKey.toBase58())
+  console.log("Deed account address: ", deedKeypair.publicKey.toBase58());
 
   const newDeedKeypair = anchor.web3.Keypair.generate();
-  console.log("New deed account address: ", newDeedKeypair.publicKey.toBase58())
+  console.log(
+    "New deed account address: ",
+    newDeedKeypair.publicKey.toBase58()
+  );
 
   const emergencyKeypair = anchor.web3.Keypair.generate();
-  console.log("Emergency account address: ", emergencyKeypair.publicKey.toBase58())
+  console.log(
+    "Emergency account address: ",
+    emergencyKeypair.publicKey.toBase58()
+  );
 
   const newEmergencyKeypair = anchor.web3.Keypair.generate();
-  console.log("New emergency account address: ", newEmergencyKeypair.publicKey.toBase58())
+  console.log(
+    "New emergency account address: ",
+    newEmergencyKeypair.publicKey.toBase58()
+  );
 
   const deedCreator = anchor.web3.Keypair.generate();
-  console.log("Deed creator account address: ", deedCreator.publicKey.toBase58())
+  console.log(
+    "Deed creator account address: ",
+    deedCreator.publicKey.toBase58()
+  );
 
   const newDeedOwner = anchor.web3.Keypair.generate();
-  console.log("New deed owner account address: ", newEmergencyKeypair.publicKey.toBase58())
+  console.log(
+    "New deed owner account address: ",
+    newEmergencyKeypair.publicKey.toBase58()
+  );
 
   const emergencyReceiver = anchor.web3.Keypair.generate();
-  console.log("Emergency receiver account address: ", emergencyReceiver.publicKey.toBase58())
+  console.log(
+    "Emergency receiver account address: ",
+    emergencyReceiver.publicKey.toBase58()
+  );
 
   const recoveryKeypair = anchor.web3.Keypair.generate();
-  console.log("Recovery account address: ", recoveryKeypair.publicKey.toBase58())
+  console.log(
+    "Recovery account address: ",
+    recoveryKeypair.publicKey.toBase58()
+  );
 
   const newRecoveryKeypair = anchor.web3.Keypair.generate();
-  console.log("New Recovery account address: ", newRecoveryKeypair.publicKey.toBase58())
+  console.log(
+    "New Recovery account address: ",
+    newRecoveryKeypair.publicKey.toBase58()
+  );
 
   const recoveryReceiver = anchor.web3.Keypair.generate();
-  console.log("Recovery receiver account address: ", recoveryReceiver.publicKey.toBase58())
+  console.log(
+    "Recovery receiver account address: ",
+    recoveryReceiver.publicKey.toBase58()
+  );
 
   before((done) => {
     program.provider.connection
@@ -59,7 +83,6 @@ describe("notariz", () => {
   });
 
   it("🚀 Deed creation", async () => {
-
     await program.rpc.createDeed({
       accounts: {
         deed: deedKeypair.publicKey,
@@ -71,8 +94,6 @@ describe("notariz", () => {
 
     let deedAccount = await program.account.deed.fetch(deedKeypair.publicKey);
 
-    console.log("Deed account: ", deedAccount);
-    
     assert.ok(deedAccount.withdrawalPeriod.cmpn(172800) === 0);
     expect(deedAccount.leftToBeShared).to.equal(100);
     expect(deedAccount.owner).to.eql(deedCreator.publicKey);
@@ -83,9 +104,7 @@ describe("notariz", () => {
 
     let deedAccountInfoBeforeTransfer =
       await program.provider.connection.getAccountInfo(deedKeypair.publicKey);
-    // console.log("Before: ", deedAccountInfoBeforeTransfer.lamports);
-    // program.provider.connection.getAccountInfo(deedCreator.publicKey).then(console.log).catch(console.log);
-    
+
     await program.provider.send(
       (() => {
         const tx = new Transaction();
@@ -103,39 +122,38 @@ describe("notariz", () => {
 
     let deedAccountInfoAfterTransfer =
       await program.provider.connection.getAccountInfo(deedKeypair.publicKey);
-    
-    // console.log("After: ", deedAccountInfoAfterTransfer.lamports);
-    
-    assert.ok(deedAccountInfoAfterTransfer.lamports === deedAccountInfoBeforeTransfer.lamports + lamportsToSend);
 
+    assert.ok(
+      deedAccountInfoAfterTransfer.lamports ===
+        deedAccountInfoBeforeTransfer.lamports + lamportsToSend
+    );
   });
 
   it("🚀 Withdrawing lamports from deed account", async () => {
     const lamportsToSend = new BN(10000000);
-    // console.log(deedKeypair.publicKey.toBase58())
 
     let deedAccountInfoBeforeTransfer =
       await program.provider.connection.getAccountInfo(deedKeypair.publicKey);
-    // console.log("Deed account before withdraw: ", deedAccountInfoBeforeTransfer);
-    // program.provider.connection.getAccountInfo(deedCreator.publicKey).then(console.log).catch(console.log);
-    
-    await program.rpc.withdrawDeedLamports(lamportsToSend, {
-      accounts: {
-        deed: deedKeypair.publicKey,
-        owner: deedCreator.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      },
-      signers: [deedCreator],
-    }).then((res) => program.provider.connection.confirmTransaction(res)).catch(console.log)
 
+    await program.rpc
+      .withdrawDeedLamports(lamportsToSend, {
+        accounts: {
+          deed: deedKeypair.publicKey,
+          owner: deedCreator.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [deedCreator],
+      })
+      .then((res) => program.provider.connection.confirmTransaction(res))
+      .catch(console.log);
 
     let deedAccountInfoAfterTransfer =
       await program.provider.connection.getAccountInfo(deedKeypair.publicKey);
-    
-    // console.log("Deed account after withdraw: ", deedAccountInfoAfterTransfer);
-    
-    assert.ok(deedAccountInfoAfterTransfer.lamports < deedAccountInfoBeforeTransfer.lamports);
 
+    assert.ok(
+      deedAccountInfoAfterTransfer.lamports <
+        deedAccountInfoBeforeTransfer.lamports
+    );
   });
 
   it("🚀 Editing withdrawal period", async () => {
@@ -154,7 +172,6 @@ describe("notariz", () => {
   });
 
   it("🚀 Editing deed owner", async () => {
-    
     await program.rpc.editOwner(newDeedOwner.publicKey, {
       accounts: {
         deed: deedKeypair.publicKey,
@@ -163,7 +180,9 @@ describe("notariz", () => {
       signers: [deedCreator],
     });
 
-    await program.provider.connection.getAccountInfo(deedKeypair.publicKey).catch(console.log);
+    await program.provider.connection
+      .getAccountInfo(deedKeypair.publicKey)
+      .catch(console.log);
 
     let deedAccount = await program.account.deed.fetch(deedKeypair.publicKey);
 
@@ -182,9 +201,10 @@ describe("notariz", () => {
       signers: [deedKeypair, deedCreator],
     });
 
-    let deedCreatorAccountBeforeDeletion = await program.provider.connection.getAccountInfo(deedCreator.publicKey);
-    // console.log("Deed creator before deed deletion: ", deedCreatorAccountBeforeDeletion)
-    await program.rpc.deleteDeed({
+    let deedCreatorAccountBeforeDeletion =
+      await program.provider.connection.getAccountInfo(deedCreator.publicKey);
+
+      await program.rpc.deleteDeed({
       accounts: {
         deed: deedKeypair.publicKey,
         owner: deedCreator.publicKey,
@@ -196,10 +216,13 @@ describe("notariz", () => {
       deedKeypair.publicKey
     );
 
-    let deedCreatorAccountAfterDeletion = await program.provider.connection.getAccountInfo(deedCreator.publicKey);
-    // console.log("Deed creator after deed deletion: ", deedCreatorAccountAfterDeletion)
+    let deedCreatorAccountAfterDeletion =
+      await program.provider.connection.getAccountInfo(deedCreator.publicKey);
 
-    assert.ok(deedCreatorAccountAfterDeletion.lamports > deedCreatorAccountBeforeDeletion.lamports);
+    assert.ok(
+      deedCreatorAccountAfterDeletion.lamports >
+        deedCreatorAccountBeforeDeletion.lamports
+    );
 
     expect(deedAccount === null);
   });
@@ -233,12 +256,83 @@ describe("notariz", () => {
     expect(emergencyAccount.owner).to.eql(deedCreator.publicKey);
     expect(emergencyAccount.receiver).to.eql(emergencyReceiver.publicKey);
     expect(emergencyAccount.percentage).to.equal(percentage);
+  });
+
+  it("🚀 Editing emergency percentage", async () => {
+    let percentage = 20;
+
+    let emergencyAccount = await program.account.emergency.fetch(
+      emergencyKeypair.publicKey
+    );
+
+    let percentageDifference = emergencyAccount.percentage - percentage;
+
+    let upstreamDeedAccount = await program.account.deed.fetch(
+      emergencyAccount.upstreamDeed
+    );
+
+    await program.rpc.editPercentage(percentage, {
+      accounts: {
+        emergency: emergencyKeypair.publicKey,
+        deed: emergencyAccount.upstreamDeed,
+        owner: deedCreator.publicKey
+      },
+      signers: [deedCreator],
+    });
+
+    let emergencyAccountAfterEdit = await program.account.emergency.fetch(
+      emergencyKeypair.publicKey
+    );
+
+    let upstreamDeedAccountAfterEdit = await program.account.deed.fetch(
+      emergencyAccount.upstreamDeed
+    );
+
+    expect(emergencyAccountAfterEdit.percentage).to.equal(percentage);
+    expect(upstreamDeedAccountAfterEdit.leftToBeShared).to.equal(upstreamDeedAccount.leftToBeShared + percentageDifference);
+
+    
+    let newPercentage = 10;
+
+    emergencyAccount = await program.account.emergency.fetch(
+      emergencyKeypair.publicKey
+    );
+
+    upstreamDeedAccount = await program.account.deed.fetch(
+      emergencyAccount.upstreamDeed
+    );
+
+    await program.rpc.editPercentage(newPercentage, {
+      accounts: {
+        emergency: emergencyKeypair.publicKey,
+        deed: emergencyAccount.upstreamDeed,
+        owner: deedCreator.publicKey
+      },
+      signers: [deedCreator],
+    });
+
+    let newEmergencyAccountAfterEdit = await program.account.emergency.fetch(
+      emergencyKeypair.publicKey
+    );
+
+    let newPercentageDifference = emergencyAccount.percentage - newPercentage;
+
+    let newUpstreamDeedAccountAfterEdit = await program.account.deed.fetch(
+      emergencyAccount.upstreamDeed
+    );
+
+    expect(newEmergencyAccountAfterEdit.percentage).to.equal(newPercentage);
+    expect(newUpstreamDeedAccountAfterEdit.leftToBeShared).to.equal(upstreamDeedAccount.leftToBeShared + newPercentageDifference);
 
   });
 
   it("🚀 Deleting an emergency", async () => {
-    let deedAccountInfoBeforeEmergencyDeletion = await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey)
-    let deedCreatorAccountInfoBeforeEmergencyDeletion = await program.provider.connection.getAccountInfo(deedCreator.publicKey)
+    let deedAccountInfoBeforeEmergencyDeletion =
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+      );
+    let deedCreatorAccountInfoBeforeEmergencyDeletion =
+      await program.provider.connection.getAccountInfo(deedCreator.publicKey);
 
     await program.rpc.deleteEmergency({
       accounts: {
@@ -250,15 +344,25 @@ describe("notariz", () => {
       signers: [deedCreator],
     });
 
-    let deedAccountInfoAfterEmergencyDeletion = await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey)
-    let deedCreatorAccountInfoAfterEmergencyDeletion = await program.provider.connection.getAccountInfo(deedCreator.publicKey)
+    let deedAccountInfoAfterEmergencyDeletion =
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+      );
+    let deedCreatorAccountInfoAfterEmergencyDeletion =
+      await program.provider.connection.getAccountInfo(deedCreator.publicKey);
 
     const emergencyAccount = await program.account.emergency.fetchNullable(
       emergencyKeypair.publicKey
     );
-    
-    expect(deedCreatorAccountInfoAfterEmergencyDeletion.lamports > deedCreatorAccountInfoBeforeEmergencyDeletion.lamports)
-    expect(deedAccountInfoAfterEmergencyDeletion.lamports > deedAccountInfoBeforeEmergencyDeletion.lamports)
+
+    expect(
+      deedCreatorAccountInfoAfterEmergencyDeletion.lamports >
+        deedCreatorAccountInfoBeforeEmergencyDeletion.lamports
+    );
+    expect(
+      deedAccountInfoAfterEmergencyDeletion.lamports >
+        deedAccountInfoBeforeEmergencyDeletion.lamports
+    );
     expect(emergencyAccount === null);
   });
 
@@ -278,16 +382,30 @@ describe("notariz", () => {
     await program.rpc.claimEmergency({
       accounts: {
         emergency: newEmergencyKeypair.publicKey,
-        receiver: emergencyReceiver.publicKey,
-        deed: newDeedKeypair.publicKey
+        receiver: emergencyReceiver.publicKey
       },
-      signers: [emergencyReceiver]
+      signers: [emergencyReceiver],
     });
 
     let emergencyAccount = await program.account.emergency.fetch(
       newEmergencyKeypair.publicKey
     );
     assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) > 0);
+  });
+
+  it("🚀 Rejecting a claim request", async () => {
+    await program.rpc.rejectClaim({
+      accounts: {
+        emergency: newEmergencyKeypair.publicKey,
+        owner: deedCreator.publicKey,
+      },
+      signers: [deedCreator],
+    });
+
+    let emergencyAccount = await program.account.emergency.fetch(
+      newEmergencyKeypair.publicKey
+    );
+    assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) === 0);
   });
 
   it("🚀 Redeeming an emergency transfer", async () => {
@@ -324,8 +442,6 @@ describe("notariz", () => {
       [deedCreator]
     );
 
-    // console.log("Deed account before transfer: ", await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey));
-
     await program.rpc.editWithdrawalPeriod(withdrawal_period, {
       accounts: {
         deed: newDeedKeypair.publicKey,
@@ -339,27 +455,40 @@ describe("notariz", () => {
         emergencyReceiver.publicKey
       );
     let senderAccountInfoBeforeTransfer =
-      await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey);
-  
-      let emergencyAccount = await program.account.emergency.fetch(
-        newEmergencyKeypair.publicKey
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
       );
 
-    // console.log("Claimed timestamp: ", emergencyAccount.claimedTimestamp.toString());
+    await program.rpc
+      .claimEmergency({
+        accounts: {
+          emergency: newEmergencyKeypair.publicKey,
+          receiver: emergencyReceiver.publicKey,
+        },
+        signers: [emergencyReceiver],
+      })
+      .then((res) => program.provider.connection.confirmTransaction(res))
+      .catch(console.log);
 
+    let emergencyAccount = await program.account.emergency.fetch(
+      newEmergencyKeypair.publicKey
+    );
     assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) > 0);
-    
+
     await new Promise((r) => setTimeout(r, 10000));
 
-    await program.rpc.redeemEmergency({
-      accounts: {
-        emergency: newEmergencyKeypair.publicKey,
-        receiver: emergencyReceiver.publicKey,
-        deed: newDeedKeypair.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      },
-      signers: [emergencyReceiver]
-    }).then((res) => program.provider.connection.confirmTransaction(res)).catch(console.log);
+    await program.rpc
+      .redeemEmergency({
+        accounts: {
+          emergency: newEmergencyKeypair.publicKey,
+          receiver: emergencyReceiver.publicKey,
+          deed: emergencyAccount.upstreamDeed,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [emergencyReceiver],
+      })
+      .then((res) => program.provider.connection.confirmTransaction(res))
+      .catch(console.log);
 
     emergencyAccount = await program.account.emergency.fetchNullable(
       newEmergencyKeypair.publicKey
@@ -373,10 +502,9 @@ describe("notariz", () => {
       );
 
     let senderAccountInfoAfterTransfer =
-      await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey);
-
-    console.log("Deed account after transfer: ", await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey).catch(console.log));
-    console.log("Receiver account after transfer: ", receiverAccountInfoAfterTransfer);
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+      );
 
     assert.ok(
       receiverAccountInfoAfterTransfer.lamports >
@@ -386,11 +514,9 @@ describe("notariz", () => {
       senderAccountInfoAfterTransfer.lamports <
         senderAccountInfoBeforeTransfer.lamports
     );
-
   });
 
   it("🚀 Adding a recovery", async () => {
-
     await program.rpc.addRecovery(recoveryReceiver.publicKey, {
       accounts: {
         recovery: recoveryKeypair.publicKey,
@@ -402,7 +528,7 @@ describe("notariz", () => {
     });
 
     let recoveryAccount = await program.account.recovery.fetch(
-        recoveryKeypair.publicKey
+      recoveryKeypair.publicKey
     );
 
     expect(recoveryAccount.owner).to.eql(deedCreator.publicKey);
@@ -411,8 +537,12 @@ describe("notariz", () => {
   });
 
   it("🚀 Deleting a recovery", async () => {
-    let deedAccountInfoBeforeRecoveryDeletion = await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey)
-    let deedCreatorAccountInfoBeforeRecoveryDeletion = await program.provider.connection.getAccountInfo(deedCreator.publicKey)
+    let deedAccountInfoBeforeRecoveryDeletion =
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+      );
+    let deedCreatorAccountInfoBeforeRecoveryDeletion =
+      await program.provider.connection.getAccountInfo(deedCreator.publicKey);
 
     await program.rpc.deleteRecovery({
       accounts: {
@@ -424,15 +554,25 @@ describe("notariz", () => {
       signers: [deedCreator],
     });
 
-    let deedAccountInfoAfterRecoveryDeletion = await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey)
-    let deedCreatorAccountInfoAfterRecoveryDeletion = await program.provider.connection.getAccountInfo(deedCreator.publicKey)
+    let deedAccountInfoAfterRecoveryDeletion =
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+      );
+    let deedCreatorAccountInfoAfterRecoveryDeletion =
+      await program.provider.connection.getAccountInfo(deedCreator.publicKey);
 
     const recoveryAccount = await program.account.emergency.fetchNullable(
-        recoveryKeypair.publicKey
+      recoveryKeypair.publicKey
     );
 
-    expect(deedCreatorAccountInfoAfterRecoveryDeletion.lamports > deedCreatorAccountInfoBeforeRecoveryDeletion.lamports)
-    expect(deedAccountInfoAfterRecoveryDeletion.lamports > deedAccountInfoBeforeRecoveryDeletion.lamports)
+    expect(
+      deedCreatorAccountInfoAfterRecoveryDeletion.lamports >
+        deedCreatorAccountInfoBeforeRecoveryDeletion.lamports
+    );
+    expect(
+      deedAccountInfoAfterRecoveryDeletion.lamports >
+        deedAccountInfoBeforeRecoveryDeletion.lamports
+    );
     expect(recoveryAccount === null);
   });
 
@@ -440,43 +580,43 @@ describe("notariz", () => {
     const lamportsToSend = 50000000;
 
     await program.provider.send(
-        (() => {
-          const tx = new Transaction();
-          tx.add(
-              SystemProgram.transfer({
-                fromPubkey: deedCreator.publicKey,
-                toPubkey: newDeedKeypair.publicKey,
-                lamports: lamportsToSend,
-              })
-          );
-          return tx;
-        })(),
-        [deedCreator]
+      (() => {
+        const tx = new Transaction();
+        tx.add(
+          SystemProgram.transfer({
+            fromPubkey: deedCreator.publicKey,
+            toPubkey: newDeedKeypair.publicKey,
+            lamports: lamportsToSend,
+          })
+        );
+        return tx;
+      })(),
+      [deedCreator]
     );
 
     await program.provider.send(
-        (() => {
-          const tx = new Transaction();
-          tx.add(
-              SystemProgram.transfer({
-                fromPubkey: deedCreator.publicKey,
-                toPubkey: recoveryReceiver.publicKey,
-                lamports: lamportsToSend,
-              })
-          );
-          return tx;
-        })(),
-        [deedCreator]
+      (() => {
+        const tx = new Transaction();
+        tx.add(
+          SystemProgram.transfer({
+            fromPubkey: deedCreator.publicKey,
+            toPubkey: recoveryReceiver.publicKey,
+            lamports: lamportsToSend,
+          })
+        );
+        return tx;
+      })(),
+      [deedCreator]
     );
 
-    // console.log("Deed account before transfer: ", await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey));
-
     let receiverAccountInfoBeforeTransfer =
-        await program.provider.connection.getAccountInfo(
-            recoveryReceiver.publicKey
-        );
+      await program.provider.connection.getAccountInfo(
+        recoveryReceiver.publicKey
+      );
     let senderAccountInfoBeforeTransfer =
-        await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey);
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+      );
 
     await program.rpc.addRecovery(recoveryReceiver.publicKey, {
       accounts: {
@@ -489,53 +629,62 @@ describe("notariz", () => {
     });
 
     let recoveryAccount = await program.account.recovery.fetch(
-        newRecoveryKeypair.publicKey
+      newRecoveryKeypair.publicKey
     );
 
-    await program.rpc.redeemRecovery({
-      accounts: {
-        recovery: newRecoveryKeypair.publicKey,
-        receiver: recoveryReceiver.publicKey,
-        deed: newDeedKeypair.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      },
-      signers: [recoveryReceiver]
-    }).then((res) => program.provider.connection.confirmTransaction(res)).catch(console.log);
+    await program.rpc
+      .redeemRecovery({
+        accounts: {
+          recovery: newRecoveryKeypair.publicKey,
+          receiver: recoveryReceiver.publicKey,
+          deed: recoveryAccount.upstreamDeed,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [recoveryReceiver],
+      })
+      .then((res) => program.provider.connection.confirmTransaction(res))
+      .catch(console.log);
 
     recoveryAccount = await program.account.emergency.fetchNullable(
-        newEmergencyKeypair.publicKey
+      newEmergencyKeypair.publicKey
     );
 
     expect(recoveryAccount === null);
 
     let receiverAccountInfoAfterTransfer =
-        await program.provider.connection.getAccountInfo(
-            recoveryReceiver.publicKey
-        );
+      await program.provider.connection.getAccountInfo(
+        recoveryReceiver.publicKey
+      );
 
     let senderAccountInfoAfterTransfer =
-        await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey);
-
-    console.log("Deed account after transfer: ", await program.provider.connection.getAccountInfo(newDeedKeypair.publicKey).catch(console.log));
-    console.log("Receiver account after transfer: ", receiverAccountInfoAfterTransfer);
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+      );
 
     assert.ok(
-        receiverAccountInfoAfterTransfer.lamports >
+      receiverAccountInfoAfterTransfer.lamports >
         receiverAccountInfoBeforeTransfer.lamports
     );
-    assert.ok(
-        senderAccountInfoAfterTransfer === null
-    );
-
+    assert.ok(senderAccountInfoAfterTransfer === null);
   });
 
   it("🚀 Fetching all deeds", async () => {
     const deedAccounts = await program.account.deed.all();
     assert.ok(deedAccounts.length > 0);
-
   });
 
   it("🚀 Fetching deeds by owner", async () => {
+    const deedKeypair = anchor.web3.Keypair.generate();
+
+    await program.rpc.createDeed({
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [deedKeypair, deedCreator],
+    });
+
     const deedAccounts = await program.account.deed.all([
       {
         memcmp: {
@@ -554,10 +703,32 @@ describe("notariz", () => {
         );
       })
     );
-
   });
 
   it("🚀 Fetching emergencies by receiver", async () => {
+    const deedKeypair = anchor.web3.Keypair.generate();
+    const emergencyKeypair = anchor.web3.Keypair.generate();
+    const percentage = 20;
+
+    await program.rpc.createDeed({
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [deedKeypair, deedCreator],
+    });
+
+    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, {
+      accounts: {
+        emergency: emergencyKeypair.publicKey,
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [emergencyKeypair, deedCreator],
+    });
+
     const emergencyAccounts = await program.account.emergency.all([
       {
         memcmp: {
@@ -576,6 +747,94 @@ describe("notariz", () => {
         return (
           emergencyAccount.account.receiver.toBase58() ===
           emergencyReceiver.publicKey.toBase58()
+        );
+      })
+    );
+  });
+
+  it("🚀 Fetching recoveries by owner", async () => {
+
+    const deedKeypair = anchor.web3.Keypair.generate();
+    const recoveryKeypair = anchor.web3.Keypair.generate();
+
+    await program.rpc.createDeed({
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [deedKeypair, deedCreator],
+    });
+
+    await program.rpc.addRecovery(recoveryReceiver.publicKey, {
+      accounts: {
+        recovery: recoveryKeypair.publicKey,
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [recoveryKeypair, deedCreator],
+    });
+
+    const recoveryAccounts = await program.account.recovery.all([
+      {
+        memcmp: {
+          offset: 8 + 32, // Discriminator.
+          bytes: deedCreator.publicKey.toBase58(),
+        },
+      },
+    ]);
+
+    assert.ok(recoveryAccounts.length > 0);
+    assert.ok(
+      recoveryAccounts.every((recoveryAccount) => {
+        return (
+          recoveryAccount.account.owner.toBase58() ===
+          deedCreator.publicKey.toBase58()
+        );
+      })
+    );
+  });
+
+  it("🚀 Fetching recoveries by receiver", async () => {
+
+    const deedKeypair = anchor.web3.Keypair.generate();
+    const recoveryKeypair = anchor.web3.Keypair.generate();
+
+    await program.rpc.createDeed({
+      accounts: {
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [deedKeypair, deedCreator],
+    });
+    
+    await program.rpc.addRecovery(recoveryReceiver.publicKey, {
+      accounts: {
+        recovery: recoveryKeypair.publicKey,
+        deed: deedKeypair.publicKey,
+        owner: deedCreator.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [recoveryKeypair, deedCreator],
+    });
+
+    const recoveryAccounts = await program.account.recovery.all([
+      {
+        memcmp: {
+          offset: 8 + 32 + 32, // Discriminator.
+          bytes: recoveryReceiver.publicKey.toBase58(),
+        },
+      },
+    ]);
+
+    assert.ok(recoveryAccounts.length > 0);
+    assert.ok(
+      recoveryAccounts.every((recoveryAccount) => {
+        return (
+          recoveryAccount.account.receiver.toBase58() ===
+          recoveryReceiver.publicKey.toBase58()
         );
       })
     );
