@@ -64,7 +64,7 @@ pub mod notariz {
     pub fn add_emergency(
         ctx: Context<AddEmergency>,
         receiver: Pubkey,
-        percentage: u8,
+        percentage: u64,
     ) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
@@ -83,14 +83,15 @@ pub mod notariz {
         emergency.owner = *owner.key;
         emergency.receiver = receiver;
         emergency.percentage += percentage;
+        emergency.claimed_timestamp = 0;
         
         Ok(())
     }
 
-    pub fn edit_percentage(ctx: Context<EditEmergency>, new_percentage: u8) -> ProgramResult {
+    pub fn edit_percentage(ctx: Context<EditEmergency>, new_percentage: u64) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
-        let difference: u8 = emergency.percentage - new_percentage;
+        let difference: u64 = emergency.percentage - new_percentage;
 
         deed.last_seen = Clock::get()?.unix_timestamp;
 
@@ -118,6 +119,10 @@ pub mod notariz {
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
         let clock: Clock = Clock::get().unwrap();
 
+        if emergency.claimed_timestamp > 0 {
+            return Err(NotarizErrorCode::EmergencyAlreadyClaimed.into());
+        }
+
         emergency.claimed_timestamp = clock.unix_timestamp;
 
         Ok(())
@@ -139,7 +144,7 @@ pub mod notariz {
         let clock: Clock = Clock::get().unwrap();
         let receiver: &Signer = &ctx.accounts.receiver;
         let lamports_to_send =
-            deed.to_account_info().lamports() * u64::from(emergency.percentage) / 100;
+            deed.to_account_info().lamports() * u64::from(emergency.percentage) / deed.left_to_be_shared;
 
         if emergency.claimed_timestamp < deed.last_seen {
             return Err(NotarizErrorCode::ClaimNeededToRedeem.into());
@@ -335,14 +340,14 @@ pub struct RedeemRecovery<'info> {
 pub struct Deed {
     pub owner: Pubkey,
     pub last_seen: i64,
-    pub left_to_be_shared: u8,  // Percentage comprised in [1;100]
+    pub left_to_be_shared: u64,  // Percentage comprised in [1;100]
     pub withdrawal_period: i64, // In seconds (up to 136 years)
 }
 
 const PUBLIC_KEY_LENGTH: usize = 32;
 const TIMESTAMP_LENGTH: usize = 8;
 const WITHDRAWAL_PERIOD_LENGTH: usize = 8;
-const LEFT_TO_BE_SHARED_LENGTH: usize = 1;
+const LEFT_TO_BE_SHARED_LENGTH: usize = 8;
 const DISCRIMINATOR_LENGTH: usize = 8;
 
 const DEED_LENGTH: usize = PUBLIC_KEY_LENGTH
@@ -360,11 +365,11 @@ pub struct Emergency {
     pub upstream_deed: Pubkey,
     pub owner: Pubkey,
     pub receiver: Pubkey,
-    pub percentage: u8,
+    pub percentage: u64,
     pub claimed_timestamp: i64,
 }
 
-const PERCENTAGE_LENGTH: usize = 1;
+const PERCENTAGE_LENGTH: usize = 8;
 
 const EMERGENCY_LENGTH: usize =
     3 * PUBLIC_KEY_LENGTH + PERCENTAGE_LENGTH + TIMESTAMP_LENGTH;
@@ -409,6 +414,8 @@ pub enum NotarizErrorCode {
     LamportTransferError,
     #[msg("You must wait longer before claiming.")]
     DeedWithdrawalTimeout,
+    #[msg("This emergency transfer has already been claimed..")]
+    EmergencyAlreadyClaimed,
     #[msg("This emergency has yet to be claimed.")]
     ClaimNeededToRedeem,
     #[msg("This emergency cannot be redeemed yet.")]

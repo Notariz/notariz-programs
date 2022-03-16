@@ -95,7 +95,7 @@ describe("notariz", () => {
     let deedAccount = await program.account.deed.fetch(deedKeypair.publicKey);
 
     assert.ok(deedAccount.withdrawalPeriod.cmpn(172800) === 0);
-    expect(deedAccount.leftToBeShared).to.equal(100);
+    expect(deedAccount.leftToBeShared.cmpn(100) === 0);
     expect(deedAccount.owner).to.eql(deedCreator.publicKey);
   });
 
@@ -228,7 +228,7 @@ describe("notariz", () => {
   });
 
   it("🚀 Adding an emergency", async () => {
-    const percentage = 10;
+    const percentage = new BN(10);
 
     await program.rpc.createDeed({
       accounts: {
@@ -255,17 +255,17 @@ describe("notariz", () => {
 
     expect(emergencyAccount.owner).to.eql(deedCreator.publicKey);
     expect(emergencyAccount.receiver).to.eql(emergencyReceiver.publicKey);
-    expect(emergencyAccount.percentage).to.equal(percentage);
+    expect(emergencyAccount.percentage.cmpn(percentage.toNumber()) === 0);
   });
 
   it("🚀 Editing emergency percentage", async () => {
-    let percentage = 20;
+    let percentage = new BN(20);
 
     let emergencyAccount = await program.account.emergency.fetch(
       emergencyKeypair.publicKey
     );
 
-    let percentageDifference = emergencyAccount.percentage - percentage;
+    let percentageDifference = new BN(emergencyAccount.percentage.toNumber() - percentage.toNumber());
 
     let upstreamDeedAccount = await program.account.deed.fetch(
       emergencyAccount.upstreamDeed
@@ -288,11 +288,11 @@ describe("notariz", () => {
       emergencyAccount.upstreamDeed
     );
 
-    expect(emergencyAccountAfterEdit.percentage).to.equal(percentage);
-    expect(upstreamDeedAccountAfterEdit.leftToBeShared).to.equal(upstreamDeedAccount.leftToBeShared + percentageDifference);
+    expect(emergencyAccountAfterEdit.percentage.cmpn(percentage.toNumber()) === 0);
+    expect(upstreamDeedAccountAfterEdit.leftToBeShared.cmpn(upstreamDeedAccount.leftToBeShared.toNumber() + percentageDifference.toNumber()) === 0 );
 
     
-    let newPercentage = 10;
+    let newPercentage = new BN(10);
 
     emergencyAccount = await program.account.emergency.fetch(
       emergencyKeypair.publicKey
@@ -315,14 +315,14 @@ describe("notariz", () => {
       emergencyKeypair.publicKey
     );
 
-    let newPercentageDifference = emergencyAccount.percentage - newPercentage;
+    let newPercentageDifference = new BN(emergencyAccount.percentage.toNumber() - newPercentage.toNumber());
 
     let newUpstreamDeedAccountAfterEdit = await program.account.deed.fetch(
       emergencyAccount.upstreamDeed
     );
 
-    expect(newEmergencyAccountAfterEdit.percentage).to.equal(newPercentage);
-    expect(newUpstreamDeedAccountAfterEdit.leftToBeShared).to.equal(upstreamDeedAccount.leftToBeShared + newPercentageDifference);
+    expect(newEmergencyAccountAfterEdit.percentage.cmpn(newPercentage.toNumber()) === 0);
+    expect(newUpstreamDeedAccountAfterEdit.leftToBeShared.cmpn(upstreamDeedAccount.leftToBeShared.toNumber() + newPercentageDifference.toNumber()) === 0);
 
   });
 
@@ -367,7 +367,7 @@ describe("notariz", () => {
   });
 
   it("🚀 Claiming an emergency transfer", async () => {
-    const percentage = 10;
+    const percentage = new BN(10);
 
     await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, {
       accounts: {
@@ -708,7 +708,7 @@ describe("notariz", () => {
   it("🚀 Fetching emergencies by receiver", async () => {
     const deedKeypair = anchor.web3.Keypair.generate();
     const emergencyKeypair = anchor.web3.Keypair.generate();
-    const percentage = 20;
+    const percentage = new BN(20);
 
     await program.rpc.createDeed({
       accounts: {
