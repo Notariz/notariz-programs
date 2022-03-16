@@ -14,6 +14,7 @@ pub mod notariz {
         deed.withdrawal_period = 2 * 3600 * 24; // Day-to-second conversion
         deed.left_to_be_shared = 100;
         deed.last_seen = clock.unix_timestamp;
+        deed.already_redeemed = 0;
 
         Ok(())
     }
@@ -25,6 +26,7 @@ pub mod notariz {
 
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.already_redeemed = 0;
 
         let owner: &Signer = &mut ctx.accounts.owner;
 
@@ -38,6 +40,7 @@ pub mod notariz {
     pub fn edit_withdrawal_period(ctx: Context<EditDeed>, withdrawal_period: i64) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let clock: Clock = Clock::get().unwrap();
+        deed.already_redeemed = 0;
 
         deed.withdrawal_period = withdrawal_period; // Day-to-second conversion
         deed.last_seen = clock.unix_timestamp;
@@ -72,6 +75,7 @@ pub mod notariz {
         let clock: Clock = Clock::get().unwrap();
 
         deed.last_seen = clock.unix_timestamp;
+        deed.already_redeemed = 0;
 
         if deed.left_to_be_shared < percentage {
             return Err(NotarizErrorCode::PercentageError.into());
@@ -94,6 +98,7 @@ pub mod notariz {
         let difference: u8 = emergency.percentage - new_percentage;
 
         deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.already_redeemed = 0;
 
         if deed.left_to_be_shared + difference > 100 {
             return Err(NotarizErrorCode::PercentageError.into());
@@ -108,6 +113,7 @@ pub mod notariz {
     pub fn delete_emergency(ctx: Context<DeleteEmergency>) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.already_redeemed = 0;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
 
         deed.left_to_be_shared += emergency.percentage;
@@ -130,11 +136,9 @@ pub mod notariz {
 
     pub fn reject_claim(ctx: Context<RejectClaim>) -> ProgramResult {
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
-
         emergency.claimed_timestamp = 0;
 
         Ok(())
-
     }
 
     pub fn redeem_emergency(ctx: Context<RedeemEmergency>) -> ProgramResult {
@@ -143,8 +147,9 @@ pub mod notariz {
 
         let clock: Clock = Clock::get().unwrap();
         let receiver: &Signer = &ctx.accounts.receiver;
+        // division by 0 should be prevented by the deed deletion when no lamport remain
         let lamports_to_send =
-            deed.to_account_info().lamports() * u64::from(emergency.percentage) / u64::from(deed.left_to_be_shared);
+            deed.to_account_info().lamports() * u64::from(emergency.percentage) / (100u64 - u64::from(deed.already_redeemed));
 
         if emergency.claimed_timestamp < deed.last_seen {
             return Err(NotarizErrorCode::ClaimNeededToRedeem.into());
@@ -154,8 +159,9 @@ pub mod notariz {
             return Err(NotarizErrorCode::RedeemTimestampError.into());
         }
 
-        transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send);
-
+        transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send)?;
+        deed.left_to_be_shared += emergency.percentage;
+        deed.already_redeemed += emergency.percentage;
         Ok(())
     }
 
@@ -187,7 +193,7 @@ pub mod notariz {
         let receiver: &Signer = &ctx.accounts.receiver;
         let lamports_to_send = deed.to_account_info().lamports();
 
-        transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send);
+        transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send)?;
 
         Ok(())
     }
@@ -195,6 +201,7 @@ pub mod notariz {
     pub fn keep_alive(ctx: Context<EditDeed>) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         deed.last_seen = Clock::get()?.unix_timestamp;
+        deed.already_redeemed = 0;
         
         Ok(())
     }
@@ -342,6 +349,7 @@ pub struct Deed {
     pub last_seen: i64,
     pub left_to_be_shared: u8,  // Percentage comprised in [1;100]
     pub withdrawal_period: i64, // In seconds (up to 136 years)
+    pub already_redeemed: u8, // Percentage already redeemed
 }
 
 const PUBLIC_KEY_LENGTH: usize = 32;
@@ -349,11 +357,13 @@ const TIMESTAMP_LENGTH: usize = 8;
 const WITHDRAWAL_PERIOD_LENGTH: usize = 8;
 const LEFT_TO_BE_SHARED_LENGTH: usize = 1;
 const DISCRIMINATOR_LENGTH: usize = 8;
+const ALREADY_REDEEMED_LENGTH: usize = 1;
 
 const DEED_LENGTH: usize = PUBLIC_KEY_LENGTH
     + TIMESTAMP_LENGTH
     + WITHDRAWAL_PERIOD_LENGTH
-    + LEFT_TO_BE_SHARED_LENGTH;
+    + LEFT_TO_BE_SHARED_LENGTH
+    + ALREADY_REDEEMED_LENGTH;
 
 impl Deed {
     const LEN: usize = DISCRIMINATOR_LENGTH + DEED_LENGTH;
