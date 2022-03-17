@@ -125,11 +125,15 @@ pub mod notariz {
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
         let clock: Clock = Clock::get().unwrap();
 
-        if emergency.claimed_timestamp > 0 {
-            return Err(NotarizErrorCode::EmergencyAlreadyClaimed.into());
-        }
-
         emergency.claimed_timestamp = clock.unix_timestamp;
+
+        Ok(())
+    }
+
+    pub fn cancel_claim_request(ctx: Context<ClaimEmergency>) -> ProgramResult {
+        let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+
+        emergency.claimed_timestamp = 0;
 
         Ok(())
     }
