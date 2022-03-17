@@ -131,9 +131,12 @@ pub mod notariz {
     }
 
     pub fn cancel_claim_request(ctx: Context<ClaimEmergency>) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+        let clock: Clock = Clock::get().unwrap();
 
         emergency.claimed_timestamp = 0;
+        deed.last_seen = clock.unix_timestamp;
 
         Ok(())
     }
@@ -294,6 +297,8 @@ pub struct ClaimEmergency<'info> {
 pub struct RejectClaim<'info> {
     #[account(mut, has_one = owner)]
     pub emergency: Account<'info, Emergency>,
+    #[account(mut, has_one = owner)]
+    pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub owner: Signer<'info>,
 }
