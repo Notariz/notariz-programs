@@ -290,7 +290,6 @@ describe("notariz", () => {
 
     expect(emergencyAccountAfterEdit.percentage).to.equal(percentage);
     expect(upstreamDeedAccountAfterEdit.leftToBeShared).to.equal(upstreamDeedAccount.leftToBeShared + percentageDifference);
-
     
     let newPercentage = 10;
 
@@ -323,7 +322,6 @@ describe("notariz", () => {
 
     expect(newEmergencyAccountAfterEdit.percentage).to.equal(newPercentage);
     expect(newUpstreamDeedAccountAfterEdit.leftToBeShared).to.equal(upstreamDeedAccount.leftToBeShared + newPercentageDifference);
-
   });
 
   it("🚀 Deleting an emergency", async () => {
@@ -366,8 +364,10 @@ describe("notariz", () => {
     expect(emergencyAccount === null);
   });
 
-  it("🚀 Claiming an emergency transfer", async () => {
-    const percentage = 10;
+  it("🚀 Editing emergency payments", async () => {
+    let percentage = 100;
+    let numberOfPayments = 3;
+    let timeBetweenPayments = new BN(1);
 
     await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, {
       accounts: {
@@ -378,6 +378,30 @@ describe("notariz", () => {
       },
       signers: [newEmergencyKeypair, deedCreator],
     });
+
+    let emergencyAccount = await program.account.emergency.fetch(
+      newEmergencyKeypair.publicKey
+    );
+
+    await program.rpc.editPayments(timeBetweenPayments, numberOfPayments, {
+      accounts: {
+        emergency: newEmergencyKeypair.publicKey,
+        deed: emergencyAccount.upstreamDeed,
+        owner: deedCreator.publicKey
+      },
+      signers: [deedCreator],
+    });
+
+    let emergencyAccountAfterEdit = await program.account.emergency.fetch(
+      newEmergencyKeypair.publicKey
+    );
+
+    expect(emergencyAccountAfterEdit.numberOfPayments).to.equal(numberOfPayments);
+    assert.ok(emergencyAccountAfterEdit.timeBetweenPayments.cmpn(1) == 0);
+  });
+
+  it("🚀 Claiming an emergency transfer", async () => {
+    const percentage = 10;
 
     await program.rpc.claimEmergency({
       accounts: {
@@ -397,6 +421,7 @@ describe("notariz", () => {
     await program.rpc.rejectClaim({
       accounts: {
         emergency: newEmergencyKeypair.publicKey,
+        deed: newDeedKeypair.publicKey,
         owner: deedCreator.publicKey,
       },
       signers: [deedCreator],
@@ -409,8 +434,10 @@ describe("notariz", () => {
   });
 
   it("🚀 Redeeming an emergency transfer", async () => {
-    const withdrawal_period = new BN(1);
-    const lamportsToSend = 50000000;
+    const withdrawal_period = new BN(0);
+    const lamportsToSend = 100000000;
+    let totalNumberOfPayments = 3;
+    let timeBetweenPayments = new BN(1);
 
     await program.provider.send(
       (() => {
@@ -442,6 +469,30 @@ describe("notariz", () => {
       [deedCreator]
     );
 
+    let emergencyAccount = await program.account.emergency.fetch(
+      newEmergencyKeypair.publicKey
+    );
+
+    await program.rpc.editPayments(timeBetweenPayments, totalNumberOfPayments, {
+      accounts: {
+        emergency: newEmergencyKeypair.publicKey,
+        deed: emergencyAccount.upstreamDeed,
+        owner: deedCreator.publicKey
+      },
+      signers: [deedCreator],
+    });
+
+    emergencyAccount = await program.account.emergency.fetch(
+      newEmergencyKeypair.publicKey
+    );
+
+  const numberOfPayments = emergencyAccount.numberOfPayments;
+  const paymentsLeft = emergencyAccount.paymentsLeft;
+
+  assert.ok(emergencyAccount.timeBetweenPayments.cmpn(0) > 0);
+  expect(numberOfPayments == totalNumberOfPayments);
+  expect(paymentsLeft == 3);
+
     await program.rpc.editWithdrawalPeriod(withdrawal_period, {
       accounts: {
         deed: newDeedKeypair.publicKey,
@@ -470,12 +521,13 @@ describe("notariz", () => {
       .then((res) => program.provider.connection.confirmTransaction(res))
       .catch(console.log);
 
-    let emergencyAccount = await program.account.emergency.fetch(
-      newEmergencyKeypair.publicKey
-    );
-    assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) > 0);
+      emergencyAccount = await program.account.emergency.fetch(
+        newEmergencyKeypair.publicKey
+      );
 
-    await new Promise((r) => setTimeout(r, 10000));
+      assert.ok(emergencyAccount.claimedTimestamp.cmpn(0) > 0);
+
+    await new Promise((r) => setTimeout(r, 1000));
 
     await program.rpc
       .redeemEmergency({
@@ -490,29 +542,115 @@ describe("notariz", () => {
       .then((res) => program.provider.connection.confirmTransaction(res))
       .catch(console.log);
 
-    emergencyAccount = await program.account.emergency.fetchNullable(
+    expect(emergencyAccount.paymentsLeft == paymentsLeft - 1);
+    
+    let emergencyAccountAfterFirstTransfer =
+      await program.provider.connection.getAccountInfo(
+        newEmergencyKeypair.publicKey
+    );
+
+    expect(emergencyAccountAfterFirstTransfer.lamports > 0);
+
+    let receiverAccountInfoAfterFirstTransfer =
+      await program.provider.connection.getAccountInfo(
+        emergencyReceiver.publicKey
+    );
+
+    let senderAccountInfoAfterFirstTransfer =
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+    );
+
+    emergencyAccount = await program.account.emergency.fetch(
       newEmergencyKeypair.publicKey
     );
 
-    expect(emergencyAccount === null);
+    await new Promise((r) => setTimeout(r, 1000));
 
-    let receiverAccountInfoAfterTransfer =
+    await program.rpc
+      .redeemEmergency({
+        accounts: {
+          emergency: newEmergencyKeypair.publicKey,
+          receiver: emergencyReceiver.publicKey,
+          deed: emergencyAccount.upstreamDeed,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [emergencyReceiver],
+      })
+      .then((res) => program.provider.connection.confirmTransaction(res))
+      .catch(console.log);
+
+    let receiverAccountInfoAfterSecondTransfer =
       await program.provider.connection.getAccountInfo(
         emergencyReceiver.publicKey
-      );
+    );
 
-    let senderAccountInfoAfterTransfer =
+    let senderAccountInfoAfterSecondTransfer =
       await program.provider.connection.getAccountInfo(
         newDeedKeypair.publicKey
+    );
+
+    emergencyAccount = await program.account.emergency.fetch(
+      newEmergencyKeypair.publicKey
+    );
+
+    await new Promise((r) => setTimeout(r, 1000));
+
+    await program.rpc
+      .redeemEmergency({
+        accounts: {
+          emergency: newEmergencyKeypair.publicKey,
+          receiver: emergencyReceiver.publicKey,
+          deed: emergencyAccount.upstreamDeed,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [emergencyReceiver],
+      })
+      .then((res) => program.provider.connection.confirmTransaction(res))
+      .catch(console.log);
+
+      emergencyAccount = await program.account.emergency.fetchNullable(
+        newEmergencyKeypair.publicKey
       );
 
+      expect(emergencyAccount === null);
+
+      let receiverAccountInfoAfterThirdTransfer =
+      await program.provider.connection.getAccountInfo(
+        emergencyReceiver.publicKey
+    );
+
+    let senderAccountInfoAfterThirdTransfer =
+      await program.provider.connection.getAccountInfo(
+        newDeedKeypair.publicKey
+    );
+
+
     assert.ok(
-      receiverAccountInfoAfterTransfer.lamports >
+      receiverAccountInfoAfterFirstTransfer.lamports >
         receiverAccountInfoBeforeTransfer.lamports
     );
     assert.ok(
-      senderAccountInfoAfterTransfer.lamports <
+      senderAccountInfoAfterFirstTransfer.lamports <
         senderAccountInfoBeforeTransfer.lamports
+    );
+
+    assert.ok(
+      receiverAccountInfoAfterSecondTransfer.lamports >
+        receiverAccountInfoAfterFirstTransfer.lamports
+    );
+    assert.ok(
+      senderAccountInfoAfterSecondTransfer.lamports <
+        senderAccountInfoAfterFirstTransfer.lamports
+    );
+
+    assert.ok(
+      receiverAccountInfoAfterThirdTransfer.lamports >
+        receiverAccountInfoAfterSecondTransfer.lamports
+    );
+    assert.ok(
+      senderAccountInfoAfterThirdTransfer.lamports <
+        senderAccountInfoAfterSecondTransfer.lamports
     );
   });
 

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::system_program;
 
-declare_id!("DFtRYEj6CB8xF6MkukkqnCxgiku7K2cJbSxsaHQWogdE");
+declare_id!("6wcMm3LaKrJejfaZvqDUU12ZnbwC8gse4EfAVBzTgT2D");
 
 #[program]
 pub mod notariz {
@@ -25,10 +25,9 @@ pub mod notariz {
     ) -> ProgramResult {
 
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
-        deed.last_seen = Clock::get()?.unix_timestamp;
-        deed.already_redeemed = 0;
-
         let owner: &Signer = &mut ctx.accounts.owner;
+
+        deed.last_seen = Clock::get()?.unix_timestamp;
 
         if deed.to_account_info().lamports() < lamports_to_send {
             return Err(NotarizErrorCode::LamportTransferError.into());
@@ -40,7 +39,10 @@ pub mod notariz {
     pub fn edit_withdrawal_period(ctx: Context<EditDeed>, withdrawal_period: i64) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let clock: Clock = Clock::get().unwrap();
-        deed.already_redeemed = 0;
+
+        if withdrawal_period < 0 {
+            return Err(NotarizErrorCode::NegativeTimestampError.into());
+        }
 
         deed.withdrawal_period = withdrawal_period; // Day-to-second conversion
         deed.last_seen = clock.unix_timestamp;
@@ -88,6 +90,9 @@ pub mod notariz {
         emergency.receiver = receiver;
         emergency.percentage += percentage;
         emergency.claimed_timestamp = 0;
+        emergency.redeem_timestamp = 0;
+        emergency.number_of_payments = 1;
+        emergency.payments_left = emergency.number_of_payments;
         
         Ok(())
     }
@@ -98,7 +103,10 @@ pub mod notariz {
         let difference: u8 = emergency.percentage - new_percentage;
 
         deed.last_seen = Clock::get()?.unix_timestamp;
-        deed.already_redeemed = 0;
+
+        if emergency.redeem_timestamp != 0 {
+            return Err(NotarizErrorCode::EmergencyEditError.into());
+        }
 
         if deed.left_to_be_shared + difference > 100 {
             return Err(NotarizErrorCode::PercentageError.into());
@@ -106,16 +114,39 @@ pub mod notariz {
 
         deed.left_to_be_shared += difference;
         emergency.percentage = new_percentage;
+        emergency.claimed_timestamp = 0;
+
+        Ok(())
+    }
+
+    pub fn edit_payments(ctx: Context<EditEmergency>, time_between_payments: i64, number_of_payments: u8) -> ProgramResult {
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+        let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+
+        deed.last_seen = Clock::get()?.unix_timestamp;
+
+        if emergency.redeem_timestamp != 0 {
+            return Err(NotarizErrorCode::EmergencyEditError.into());
+        }
+
+        if time_between_payments < 0 {
+            return Err(NotarizErrorCode::NegativeTimestampError.into());
+        }
+
+        emergency.time_between_payments = time_between_payments;
+        emergency.number_of_payments = number_of_payments;
+        emergency.payments_left = number_of_payments;
+        emergency.claimed_timestamp = 0;
 
         Ok(())
     }
 
     pub fn delete_emergency(ctx: Context<DeleteEmergency>) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
-        deed.last_seen = Clock::get()?.unix_timestamp;
-        deed.already_redeemed = 0;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+        let clock: Clock = Clock::get().unwrap();
 
+        deed.last_seen = clock.unix_timestamp;
         deed.left_to_be_shared += emergency.percentage;
 
         Ok(())
@@ -125,18 +156,27 @@ pub mod notariz {
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
         let clock: Clock = Clock::get().unwrap();
 
-        if emergency.claimed_timestamp > 0 {
-            return Err(NotarizErrorCode::EmergencyAlreadyClaimed.into());
-        }
-
         emergency.claimed_timestamp = clock.unix_timestamp;
+
+        Ok(())
+    }
+
+    pub fn cancel_claim_request(ctx: Context<ClaimEmergency>) -> ProgramResult {
+        let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+
+        emergency.claimed_timestamp = 0;
 
         Ok(())
     }
 
     pub fn reject_claim(ctx: Context<RejectClaim>) -> ProgramResult {
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
+        let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
+
+        let clock: Clock = Clock::get().unwrap();
+
         emergency.claimed_timestamp = 0;
+        deed.last_seen = clock.unix_timestamp;
 
         Ok(())
     }
@@ -147,21 +187,34 @@ pub mod notariz {
 
         let clock: Clock = Clock::get().unwrap();
         let receiver: &Signer = &ctx.accounts.receiver;
-        // division by 0 should be prevented by the deed deletion when no lamport remain
-        let lamports_to_send =
-            deed.to_account_info().lamports() * u64::from(emergency.percentage) / (100u64 - u64::from(deed.already_redeemed));
+        // division by 0 should be prevented by the deed deletion when there is no remaining lamports
+        
+        let total_share_to_send = deed.to_account_info().lamports() * u64::from(emergency.percentage) / (100u64 - u64::from(deed.already_redeemed));
+        let lamports_to_send = total_share_to_send / u64::from(emergency.number_of_payments);
 
-        if emergency.claimed_timestamp < deed.last_seen {
-            return Err(NotarizErrorCode::ClaimNeededToRedeem.into());
+        if emergency.claimed_timestamp < deed.last_seen || (emergency.redeem_timestamp != 0 && emergency.redeem_timestamp < deed.last_seen) {
+            return Err(NotarizErrorCode::ClaimNeededToRedeemError.into());
         }
 
         if clock.unix_timestamp - emergency.claimed_timestamp < deed.withdrawal_period {
-            return Err(NotarizErrorCode::RedeemTimestampError.into());
+            return Err(NotarizErrorCode::WithdrawalPeriodError.into());
         }
 
+        if emergency.payments_left != emergency.number_of_payments && clock.unix_timestamp < emergency.redeem_timestamp + emergency.time_between_payments {
+            return Err(NotarizErrorCode::WithdrawalPeriodError.into());
+        } 
+
+        emergency.payments_left -= 1;
+        deed.left_to_be_shared += emergency.percentage / emergency.number_of_payments;
+        deed.already_redeemed += emergency.percentage / emergency.number_of_payments;
+        emergency.redeem_timestamp = clock.unix_timestamp;
+
         transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send)?;
-        deed.left_to_be_shared += emergency.percentage;
-        deed.already_redeemed += emergency.percentage;
+
+        if emergency.payments_left == 0 {
+            transfer_lamports(&mut emergency.to_account_info(), &mut receiver.to_account_info(), emergency.to_account_info().lamports())?;
+        }
+
         Ok(())
     }
 
@@ -290,13 +343,15 @@ pub struct ClaimEmergency<'info> {
 pub struct RejectClaim<'info> {
     #[account(mut, has_one = owner)]
     pub emergency: Account<'info, Emergency>,
+    #[account(mut, has_one = owner)]
+    pub deed: Account<'info, Deed>,
     #[account(mut)]
     pub owner: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct RedeemEmergency<'info> {
-    #[account(mut, has_one = receiver, close = receiver)]
+    #[account(mut, has_one = receiver)]
     pub emergency: Account<'info, Emergency>,
     #[account(mut, address = emergency.upstream_deed)]
     pub deed: Account<'info, Deed>,
@@ -375,14 +430,19 @@ pub struct Emergency {
     pub upstream_deed: Pubkey,
     pub owner: Pubkey,
     pub receiver: Pubkey,
-    pub percentage: u8,
     pub claimed_timestamp: i64,
+    pub redeem_timestamp: i64,
+    pub time_between_payments: i64,
+    pub percentage: u8,
+    pub number_of_payments: u8,
+    pub payments_left: u8
 }
 
 const PERCENTAGE_LENGTH: usize = 1;
+const PAYMENT_LENGTH: usize = 1;
 
 const EMERGENCY_LENGTH: usize =
-    3 * PUBLIC_KEY_LENGTH + PERCENTAGE_LENGTH + TIMESTAMP_LENGTH;
+    3 * PUBLIC_KEY_LENGTH + PERCENTAGE_LENGTH + 3 * TIMESTAMP_LENGTH + 2 * PAYMENT_LENGTH;
 
 impl Emergency {
     const LEN: usize = DISCRIMINATOR_LENGTH + EMERGENCY_LENGTH;
@@ -422,14 +482,16 @@ pub fn transfer_lamports(
 pub enum NotarizErrorCode {
     #[msg("The account does not have the lamports it is willing to transfer.")]
     LamportTransferError,
-    #[msg("You must wait longer before claiming.")]
-    DeedWithdrawalTimeout,
-    #[msg("This emergency transfer has already been claimed..")]
-    EmergencyAlreadyClaimed,
-    #[msg("This emergency has yet to be claimed.")]
-    ClaimNeededToRedeem,
-    #[msg("This emergency cannot be redeemed yet.")]
-    RedeemTimestampError,
+    #[msg("This emergency transfer has yet to be claimed.")]
+    ClaimNeededToRedeemError,
+    #[msg("This emergency transfer cannot be executed before the withdrawal period has expired.")]
+    WithdrawalPeriodError,
+    #[msg("This emergency transfer cannot be executed before the time between payments has passed.")]
+    TimeBetweenPaymentsError,
+    #[msg("This emergency transfer cannot be edited because the redeem timestamp is greater than zero.")]
+    EmergencyEditError,
     #[msg("Percentage attribution is not compatible with the current deed distribution.")]
     PercentageError,
+    #[msg("The input timestamp cannot be negative.")]
+    NegativeTimestampError,
 }
