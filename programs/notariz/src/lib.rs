@@ -173,9 +173,8 @@ pub mod notariz {
     }
 
     pub fn reject_claim(ctx: Context<RejectClaim>) -> ProgramResult {
-        let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
-
+        let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
         let clock: Clock = Clock::get().unwrap();
 
         emergency.claimed_timestamp = 0;
