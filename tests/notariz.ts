@@ -229,6 +229,8 @@ describe("notariz", () => {
 
   it("🚀 Adding an emergency", async () => {
     const percentage = 10;
+    let timeBetweenPayments = new BN(1);
+    let numberOfPayments = 1;
 
     await program.rpc.createDeed({
       accounts: {
@@ -239,7 +241,7 @@ describe("notariz", () => {
       signers: [newDeedKeypair, deedCreator],
     });
 
-    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, {
+    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, numberOfPayments, timeBetweenPayments, {
       accounts: {
         emergency: emergencyKeypair.publicKey,
         deed: newDeedKeypair.publicKey,
@@ -256,6 +258,8 @@ describe("notariz", () => {
     expect(emergencyAccount.owner).to.eql(deedCreator.publicKey);
     expect(emergencyAccount.receiver).to.eql(emergencyReceiver.publicKey);
     expect(emergencyAccount.percentage).to.equal(percentage);
+    expect(emergencyAccount.numberOfPayments).to.equal(numberOfPayments);
+    expect(emergencyAccount.timeBetweenPayments.cmpn(1) == 0);
   });
 
   it("🚀 Editing emergency percentage", async () => {
@@ -369,7 +373,7 @@ describe("notariz", () => {
     let numberOfPayments = 3;
     let timeBetweenPayments = new BN(1);
 
-    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, {
+    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, numberOfPayments, timeBetweenPayments, {
       accounts: {
         emergency: newEmergencyKeypair.publicKey,
         deed: newDeedKeypair.publicKey,
@@ -565,6 +569,17 @@ describe("notariz", () => {
       newEmergencyKeypair.publicKey
     );
 
+    await program.rpc
+      .claimEmergency({
+        accounts: {
+          emergency: newEmergencyKeypair.publicKey,
+          receiver: emergencyReceiver.publicKey,
+        },
+        signers: [emergencyReceiver],
+      })
+      .then((res) => program.provider.connection.confirmTransaction(res))
+      .catch(console.log);
+
     await new Promise((r) => setTimeout(r, 1000));
 
     await program.rpc
@@ -593,6 +608,17 @@ describe("notariz", () => {
     emergencyAccount = await program.account.emergency.fetch(
       newEmergencyKeypair.publicKey
     );
+
+    await program.rpc
+      .claimEmergency({
+        accounts: {
+          emergency: newEmergencyKeypair.publicKey,
+          receiver: emergencyReceiver.publicKey,
+        },
+        signers: [emergencyReceiver],
+      })
+      .then((res) => program.provider.connection.confirmTransaction(res))
+      .catch(console.log);
 
     await new Promise((r) => setTimeout(r, 1000));
 
@@ -847,6 +873,8 @@ describe("notariz", () => {
     const deedKeypair = anchor.web3.Keypair.generate();
     const emergencyKeypair = anchor.web3.Keypair.generate();
     const percentage = 20;
+    let timeBetweenPayments = new BN(0);
+    let numberOfPayments = 1;
 
     await program.rpc.createDeed({
       accounts: {
@@ -857,7 +885,7 @@ describe("notariz", () => {
       signers: [deedKeypair, deedCreator],
     });
 
-    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, {
+    await program.rpc.addEmergency(emergencyReceiver.publicKey, percentage, numberOfPayments, timeBetweenPayments, {
       accounts: {
         emergency: emergencyKeypair.publicKey,
         deed: deedKeypair.publicKey,

@@ -44,7 +44,7 @@ pub mod notariz {
             return Err(NotarizErrorCode::NegativeTimestampError.into());
         }
 
-        deed.withdrawal_period = withdrawal_period; // Day-to-second conversion
+        deed.withdrawal_period = withdrawal_period; 
         deed.last_seen = clock.unix_timestamp;
 
         Ok(())
@@ -70,6 +70,8 @@ pub mod notariz {
         ctx: Context<AddEmergency>,
         receiver: Pubkey,
         percentage: u8,
+        number_of_payments: u8,
+        time_between_payments: i64
     ) -> ProgramResult {
         let deed: &mut Account<Deed> = &mut ctx.accounts.deed;
         let emergency: &mut Account<Emergency> = &mut ctx.accounts.emergency;
@@ -91,7 +93,8 @@ pub mod notariz {
         emergency.percentage += percentage;
         emergency.claimed_timestamp = 0;
         emergency.redeem_timestamp = 0;
-        emergency.number_of_payments = 1;
+        emergency.time_between_payments = time_between_payments;
+        emergency.number_of_payments = number_of_payments;
         emergency.payments_left = emergency.number_of_payments;
         
         Ok(())
@@ -147,7 +150,7 @@ pub mod notariz {
         let clock: Clock = Clock::get().unwrap();
 
         deed.last_seen = clock.unix_timestamp;
-        deed.left_to_be_shared += emergency.percentage;
+        deed.left_to_be_shared += emergency.percentage * emergency.payments_left / emergency.number_of_payments;
 
         Ok(())
     }
@@ -192,7 +195,7 @@ pub mod notariz {
         let total_share_to_send = deed.to_account_info().lamports() * u64::from(emergency.percentage) / (100u64 - u64::from(deed.already_redeemed));
         let lamports_to_send = total_share_to_send / u64::from(emergency.number_of_payments);
 
-        if emergency.claimed_timestamp < deed.last_seen || (emergency.redeem_timestamp != 0 && emergency.redeem_timestamp < deed.last_seen) {
+        if emergency.claimed_timestamp < deed.last_seen {
             return Err(NotarizErrorCode::ClaimNeededToRedeemError.into());
         }
 
@@ -208,6 +211,7 @@ pub mod notariz {
         deed.left_to_be_shared += emergency.percentage / emergency.number_of_payments;
         deed.already_redeemed += emergency.percentage / emergency.number_of_payments;
         emergency.redeem_timestamp = clock.unix_timestamp;
+        emergency.claimed_timestamp = 0;
 
         transfer_lamports(&mut deed.to_account_info(), &mut receiver.to_account_info(), lamports_to_send)?;
 
@@ -435,7 +439,7 @@ pub struct Emergency {
     pub time_between_payments: i64,
     pub percentage: u8,
     pub number_of_payments: u8,
-    pub payments_left: u8
+    pub payments_left: u8,
 }
 
 const PERCENTAGE_LENGTH: usize = 1;
